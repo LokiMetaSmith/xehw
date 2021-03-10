@@ -13,9 +13,9 @@ crate-type = ["cdylib", "rlib"]
 eframe = "0.10.0" # Gives us egui, epi and web+native backends
 serde = { version = "1", features = ["derive"], optional = true }
 
-#[dependencies.xeh]
-#path = "../xeh"
-#default-features = false
+[dependencies.xeh]
+path = "../xeh"
+default-features = false
 
 [features]
 default = []

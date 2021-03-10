@@ -1,18 +1,21 @@
-use eframe::{
-    egui,
-    epi,
-};
+use eframe::{egui, epi};
+use egui::*;
+use xeh::prelude::*;
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[cfg_attr(feature = "persistence", derive(serde::Deserialize, serde::Serialize))]
 pub struct TemplateApp {
     repl: String,
+    log: String,
+    xs: Xstate,
 }
 
 impl Default for TemplateApp {
     fn default() -> Self {
         Self {
             repl: String::new(),
+            log: String::new(),
+            xs: Xstate::new().unwrap(),
         }
     }
 }
@@ -37,7 +40,7 @@ impl epi::App for TemplateApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::CtxRef, frame: &mut epi::Frame<'_>) {
-        let TemplateApp { repl } = self;
+        let TemplateApp { repl, log, xs } = self;
 
         egui::TopPanel::top("top_panel").show(ctx, |ui| {
             // The top panel is often a good place for a menu bar:
@@ -51,10 +54,23 @@ impl epi::App for TemplateApp {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Test");
+            ui.heading("REPL:");
             ui.separator();
-            ui.heading("Central Panel");
-            ui.text_edit_singleline(repl);
+            ui.add(
+                TextEdit::multiline(log)
+                    .text_style(TextStyle::Monospace)
+                    .desired_rows(25)
+            );
+            ui.add(TextEdit::singleline(repl).text_style(TextStyle::Monospace));
+            let res = ui.button("Run");
+            if res.clicked() {
+                log.push_str(repl);
+                log.push_str("\n");
+                let _ = xs.interpret(repl);
+                log.push_str(xs.display_str());
+                xs.display_clear();
+                repl.clear();
+            }
         });
     }
 }
