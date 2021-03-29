@@ -42,25 +42,35 @@ impl epi::App for TemplateApp {
     fn update(&mut self, ctx: &egui::CtxRef, frame: &mut epi::Frame<'_>) {
         let TemplateApp { repl, log, xs } = self;
 
-        egui::TopPanel::top("top_panel").show(ctx, |ui| {
-            // The top panel is often a good place for a menu bar:
-            egui::menu::bar(ui, |ui| {
-                egui::menu::menu(ui, "File", |ui| {
-                    if ui.button("Quit").clicked() {
-                        frame.quit();
+        egui::SidePanel::left("stack", 200.0)
+        .show(ctx, |ui| {
+            ui.vertical(|ui| {
+                ui.heading("Stack");
+                ui.separator();
+                ui.set_min_width(200.0);
+                for i in 0.. {
+                    if let Some(val) = xs.get_data(i) {
+                        ui.label(format!("{:1?}", val));
+                    } else {
+                        break;
                     }
-                });
+                }
             });
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("REPL:");
-            ui.separator();
-            ui.add(
-                TextEdit::multiline(log)
-                    .text_style(TextStyle::Monospace)
-                    .desired_rows(25)
-            );
+            ui.horizontal(|ui| {
+                ui.add(
+                    TextEdit::multiline(log)
+                        .text_style(TextStyle::Monospace)
+                        .desired_rows(25)
+                );
+                ui.add(
+                    Label::new("aa\nbb\n")
+                        .wrap(true)
+                        .monospace()
+                )
+            });
             ui.add(TextEdit::singleline(repl).text_style(TextStyle::Monospace));
             let res = ui.button("Run");
             if res.clicked() {
@@ -72,5 +82,6 @@ impl epi::App for TemplateApp {
                 repl.clear();
             }
         });
+
     }
 }
