@@ -5,6 +5,8 @@
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
-    let app = xehw::TemplateApp::default();
-    eframe::run_native(Box::new(app));
+    let app = eframe_template::TemplateApp::default();
+    let native_options = eframe::NativeOptions::default();
+    native_options.drag_and_drop_support  = true;
+    eframe::run_native(Box::new(app), native_options);
 }
