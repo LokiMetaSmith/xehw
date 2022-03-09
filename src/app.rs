@@ -18,6 +18,8 @@ pub struct TemplateApp {
     frozen_code: Vec<FrozenStr>,
     backup: Option<(Xstate, Vec<FrozenStr>)>,
     bin_future: Option<Pin<BoxFuture>>,
+    canvas: MyCanvas,
+    canvas_open: bool,
 }
 
 #[derive(Clone)]
@@ -38,6 +40,8 @@ impl Default for TemplateApp {
             win_size: Vec2::new(640.0, 480.0),
             live_code: String::new(),
             frozen_code: Vec::new(),
+            canvas: MyCanvas { texture: None },
+            canvas_open: false,
             backup: None,
             bin_future: None,
         }
@@ -68,6 +72,29 @@ impl Wake for MyWaker {
     }
 }
 
+struct MyCanvas {
+    pub texture: Option<egui::TextureHandle>,
+    pub d2: Option<Xcell>,
+}
+
+impl MyCanvas {
+    fn ui(&mut self, ui: &mut egui::Ui) {
+
+        let texture: &egui::TextureHandle = self.texture.get_or_insert_with(|| {
+            ui.ctx().load_texture("my-image", egui::ColorImage::new([320, 200], Color32::GRAY))
+        });
+
+        // Show the image:
+        ui.add(egui::Image::new(texture, texture.size_vec2()));
+
+        // Shorter version:
+        //ui.image(texture, texture.size_vec2());
+    }
+
+    // fn copy_if_changed(&mut self, xs: &mut Xstate) {
+    //     xeh::d2_plugin::load(&mut xs)?;
+    // }
+}
 
 #[cfg(target_arch = "wasm32")]
 fn instant_now() -> instant::Instant {
@@ -144,6 +171,16 @@ impl epi::App for TemplateApp {
                         }
                     }
                 }
+                self.canvas.copy_if_changed();
+                if ui.button("Canvas").clicked() {
+                    self.canvas_open = true;
+                }
+                egui::Window::new("Canvas")
+                    .id(Id::new("canvas"))
+                    .open(&mut self.canvas_open)
+                    .show(ctx, |ui| {
+                        self.canvas.ui(ui)
+                });
                 if let Some(d) = ctx.input().raw.dropped_files.first() {
                     if let Some(data) = &d.bytes {
                         let s = Xbitstr::from(data.as_ref().to_owned());
@@ -169,6 +206,12 @@ impl epi::App for TemplateApp {
                     }
                 }
             });
+        });
+
+        egui::TopBottomPanel::bottom("canvas").show(ctx, |ui|{
+            ui.separator();
+            ui.label("Canvas:");
+            self.canvas.ui(ui);
         });
 
         egui::SidePanel::left("left_panel").show(ctx, |ui| {
@@ -219,9 +262,11 @@ impl epi::App for TemplateApp {
             //let index = 0;//*index = (*index as f32 + v.y).abs() as usize;
 
             ui.separator();
+            ui.label("Data Stack:");
             ui.set_max_width(size1.x);
 
             egui::containers::ScrollArea::vertical().show(ui, |ui| {
+                ui.set_min_width(size1.x);
                 for i in 0.. {
                     if let Some(x) = self.xs.get_data(i) {
                         let mut s = self.xs.format_cell(x).unwrap();
@@ -249,8 +294,8 @@ impl epi::App for TemplateApp {
             let mut code_has_focus = false;
 
             ui.collapsing("Help", |ui| {
-                ui.label("Drag and Drop file or click \"Open Binary...\" to start workspace");
-                ui.label("Click \"Run\" or Ctrl+Return to run code snippet");
+                ui.label("Drag and Drop file or click \"Open Binary...\" to start exploring");
+                ui.label("Click \"Run\" or Ctrl+Return to evaluate expression in the code window");
             });
 
             egui::containers::ScrollArea::vertical()
@@ -292,9 +337,9 @@ impl epi::App for TemplateApp {
                 let t = instant_now();
                 let res = self.xs.eval(&self.live_code);
                 self.frozen_code.push(FrozenStr { text: self.live_code.trim_end().to_owned(), log: false });
-                    if let Some(log) = self.xs.console() {
-                        self.frozen_code.push(FrozenStr { text: log.take(), log: true });
-                    }
+                if let Some(log) = self.xs.console() {
+                    self.frozen_code.push(FrozenStr { text: log.take(), log: true });
+                }
                 if res.is_ok() {
                     let text = format!("OK {:0.3}s", t.elapsed().as_secs_f64());
                     self.frozen_code.push(FrozenStr { text, log: true });
