@@ -621,19 +621,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "eframe_template"
-version = "0.1.0"
-dependencies = [
- "console_error_panic_hook",
- "eframe",
- "rfd",
- "serde",
- "tracing-wasm",
- "wasm-bindgen-futures",
- "xeh",
-]
-
-[[package]]
 name = "egui"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2482,6 +2469,20 @@ dependencies = [
  "getrandom",
  "rpds",
  "twoway",
+]
+
+[[package]]
+name = "xeh_playground"
+version = "0.1.0"
+dependencies = [
+ "console_error_panic_hook",
+ "eframe",
+ "instant",
+ "rfd",
+ "serde",
+ "tracing-wasm",
+ "wasm-bindgen-futures",
+ "xeh",
 ]
 
 [[package]]

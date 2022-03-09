@@ -68,6 +68,17 @@ impl Wake for MyWaker {
     }
 }
 
+
+#[cfg(target_arch = "wasm32")]
+fn instant_now() -> instant::Instant {
+    instant::Instant::now()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn instant_now() -> std::time::Instant {
+    std::time::Instant::now()
+}
+
 impl epi::App for TemplateApp {
     fn name(&self) -> &str {
         "eframe template"
@@ -143,13 +154,9 @@ impl epi::App for TemplateApp {
                 snapshot_clicked = snapshot_clicked || ui.button("Snapshot").clicked() ||
                     ui.input().modifiers.ctrl && ui.input().key_released(egui::Key::G);
                 if snapshot_clicked {
-                    #[cfg(not(target_arch = "wasm32"))]
-                    let t = std::time::Instant::now();
+                    let t = instant_now();
                     self.backup = Some((self.xs.clone(), self.frozen_code.to_owned()));
-                    #[cfg(not(target_arch = "wasm32"))]
-                    self.xs.print(&format!("Snapshot {}s", t.elapsed().as_secs_f64()));
-                    #[cfg(target_arch = "wasm32")]
-                    self.xs.print("Snapshot saved");
+                    self.xs.print(&format!("Snapshot {:0.3}s", t.elapsed().as_secs_f64()));
                 }
                 if self.backup.is_some() {
                     rollback_clicked = rollback_clicked || ui.button("Rollback").clicked()
@@ -279,22 +286,18 @@ impl epi::App for TemplateApp {
                 }
             }
 
-            if run_clicked || ui.input().key_down(egui::Key::Enter) &&
-             ui.input().modifiers.ctrl && !self.live_code.trim().is_empty() {
-                #[cfg(not(target_arch = "wasm32"))]
-                let t = std::time::Instant::now();
+            run_clicked = run_clicked || ui.input().key_down(egui::Key::Enter) &&
+                            ui.input().modifiers.ctrl;
+            if run_clicked && !self.live_code.trim().is_empty() {
+                let t = instant_now();
                 let res = self.xs.eval(&self.live_code);
                 self.frozen_code.push(FrozenStr { text: self.live_code.trim_end().to_owned(), log: false });
-                if res.is_ok() {
-                    #[cfg(not(target_arch = "wasm32"))]
-                    {
-                        let text = format!("{}s", t.elapsed().as_secs_f64());
-                        self.frozen_code.push(FrozenStr { text, log: true });
-                    }
-                } else {
                     if let Some(log) = self.xs.console() {
                         self.frozen_code.push(FrozenStr { text: log.take(), log: true });
                     }
+                if res.is_ok() {
+                    let text = format!("OK {:0.3}s", t.elapsed().as_secs_f64());
+                    self.frozen_code.push(FrozenStr { text, log: true });
                 }
                 self.live_code.clear();
             }
