@@ -1,8 +1,12 @@
 use eframe::{egui, epi};
 use eframe::egui::*;
-//use eframe::epi::*;
 
 use xeh::prelude::*;
+
+#[cfg(target_arch = "wasm32")]
+type Instant = instant::Instant;
+#[cfg(not(target_arch = "wasm32"))]
+type Instant = std::time::Instant;
 
 type BoxFuture = Box<dyn Future<Output = Vec<u8>>>;
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
@@ -18,8 +22,8 @@ pub struct TemplateApp {
     frozen_code: Vec<FrozenStr>,
     backup: Option<(Xstate, Vec<FrozenStr>)>,
     bin_future: Option<Pin<BoxFuture>>,
-    canvas: MyCanvas,
-    canvas_open: bool,
+    canvas: Option<egui::TextureHandle>,
+    setup_focus: bool,
 }
 
 #[derive(Clone)]
@@ -32,6 +36,7 @@ impl Default for TemplateApp {
     fn default() -> Self {
         let mut xs = Xstate::boot().unwrap();
         xs.capture_stdout();
+        xeh::d2_plugin::load(&mut xs).unwrap();
         Self {
             xs,
             view_start: 0,
@@ -40,10 +45,10 @@ impl Default for TemplateApp {
             win_size: Vec2::new(640.0, 480.0),
             live_code: String::new(),
             frozen_code: Vec::new(),
-            canvas: MyCanvas { texture: None },
-            canvas_open: false,
+            canvas: None,
             backup: None,
             bin_future: None,
+            setup_focus: true,
         }
     }
 }
@@ -72,38 +77,18 @@ impl Wake for MyWaker {
     }
 }
 
-struct MyCanvas {
-    pub texture: Option<egui::TextureHandle>,
-    pub d2: Option<Xcell>,
-}
-
-impl MyCanvas {
-    fn ui(&mut self, ui: &mut egui::Ui) {
-
-        let texture: &egui::TextureHandle = self.texture.get_or_insert_with(|| {
-            ui.ctx().load_texture("my-image", egui::ColorImage::new([320, 200], Color32::GRAY))
-        });
-
-        // Show the image:
-        ui.add(egui::Image::new(texture, texture.size_vec2()));
-
-        // Shorter version:
-        //ui.image(texture, texture.size_vec2());
+fn get_canvas_data(xs: &mut Xstate) -> Xresult1<(usize, usize, Xbitstr)> {
+    xs.eval_word("d2-width")?;
+    let w = xs.pop_data()?.to_usize()?;
+    xs.eval_word("d2-height")?;
+    let h = xs.pop_data()?.to_usize()?;
+    if w > 0 && h > 0 {
+        xs.eval_word("d2-capture-rgba")?;
+        let bs = xs.pop_data()?.to_bitstring()?;
+        Ok((w, h, bs))
+    } else {
+        Err(Xerr::NotFound)
     }
-
-    // fn copy_if_changed(&mut self, xs: &mut Xstate) {
-    //     xeh::d2_plugin::load(&mut xs)?;
-    // }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn instant_now() -> instant::Instant {
-    instant::Instant::now()
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn instant_now() -> std::time::Instant {
-    std::time::Instant::now()
 }
 
 impl epi::App for TemplateApp {
@@ -171,16 +156,6 @@ impl epi::App for TemplateApp {
                         }
                     }
                 }
-                self.canvas.copy_if_changed();
-                if ui.button("Canvas").clicked() {
-                    self.canvas_open = true;
-                }
-                egui::Window::new("Canvas")
-                    .id(Id::new("canvas"))
-                    .open(&mut self.canvas_open)
-                    .show(ctx, |ui| {
-                        self.canvas.ui(ui)
-                });
                 if let Some(d) = ctx.input().raw.dropped_files.first() {
                     if let Some(data) = &d.bytes {
                         let s = Xbitstr::from(data.as_ref().to_owned());
@@ -188,10 +163,13 @@ impl epi::App for TemplateApp {
                     }
                 }
                 run_clicked = ui.button("Run").clicked();
+                if ui.input().key_down(egui::Key::Enter) && ui.input().modifiers.ctrl {
+                    run_clicked = true;
+                }
                 snapshot_clicked = snapshot_clicked || ui.button("Snapshot").clicked() ||
                     ui.input().modifiers.ctrl && ui.input().key_released(egui::Key::G);
                 if snapshot_clicked {
-                    let t = instant_now();
+                    let t = Instant::now();
                     self.backup = Some((self.xs.clone(), self.frozen_code.to_owned()));
                     self.xs.print(&format!("Snapshot {:0.3}s", t.elapsed().as_secs_f64()));
                 }
@@ -205,13 +183,31 @@ impl epi::App for TemplateApp {
                         }
                     }
                 }
+                if run_clicked || rollback_clicked {
+                    if let Ok((w, h, bs)) = get_canvas_data(&mut self.xs) {
+                        let image = egui::ColorImage::from_rgba_unmultiplied([w, h], bs.slice());
+                        self.xs.print(&format!("update canvas {}x{}\n", w, h));
+                        if let Some(tex) = self.canvas.as_mut() {
+                            tex.set(image);
+                        } else {
+                            let tex = ui.ctx().load_texture("canvas-texture", image);
+                            self.canvas = Some(tex);
+                        }
+                    }
+                }
             });
         });
 
         egui::TopBottomPanel::bottom("canvas").show(ctx, |ui|{
             ui.separator();
-            ui.label("Canvas:");
-            self.canvas.ui(ui);
+            //ui.collapsing("Canvas:", |ui|{
+                if let Some(texture) = self.canvas.as_ref() {
+                    ui.label(format!("Canvas {}x{}", texture.size_vec2().x, texture.size_vec2().y));
+                    ui.add(egui::Image::new(texture, texture.size_vec2()));
+                } else {
+                    ui.label("Canvas is empty");
+                }
+            //});
         });
 
         egui::SidePanel::left("left_panel").show(ctx, |ui| {
@@ -262,7 +258,7 @@ impl epi::App for TemplateApp {
             //let index = 0;//*index = (*index as f32 + v.y).abs() as usize;
 
             ui.separator();
-            ui.label("Data Stack:");
+            ui.label(format!("Data Stack: {} items", self.xs.data_depth()));
             ui.set_max_width(size1.x);
 
             egui::containers::ScrollArea::vertical().show(ui, |ui| {
@@ -300,7 +296,6 @@ impl epi::App for TemplateApp {
 
             egui::containers::ScrollArea::vertical()
                      .stick_to_bottom().show(ui, |ui| {
-                
                 for s in self.frozen_code.iter() {
                     let richtext = RichText::new(s.text.to_owned())
                         .monospace()
@@ -313,6 +308,10 @@ impl epi::App for TemplateApp {
                     .code_editor()
                     .id(Id::new("code"));
                 let res = ui.add(code);
+                if self.setup_focus {
+                    res.request_focus();
+                    self.setup_focus = false;
+                }
                 code_has_focus = res.has_focus();
             });
             
@@ -331,10 +330,8 @@ impl epi::App for TemplateApp {
                 }
             }
 
-            run_clicked = run_clicked || ui.input().key_down(egui::Key::Enter) &&
-                            ui.input().modifiers.ctrl;
             if run_clicked && !self.live_code.trim().is_empty() {
-                let t = instant_now();
+                let t = Instant::now();
                 let res = self.xs.eval(&self.live_code);
                 self.frozen_code.push(FrozenStr { text: self.live_code.trim_end().to_owned(), log: false });
                 if let Some(log) = self.xs.console() {
