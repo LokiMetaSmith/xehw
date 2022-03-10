@@ -199,7 +199,6 @@ impl epi::App for TemplateApp {
         });
 
         egui::TopBottomPanel::bottom("canvas").show(ctx, |ui|{
-            ui.separator();
             //ui.collapsing("Canvas:", |ui|{
                 if let Some(texture) = self.canvas.as_ref() {
                     ui.label(format!("Canvas {}x{}", texture.size_vec2().x, texture.size_vec2().y));
@@ -271,8 +270,8 @@ impl epi::App for TemplateApp {
                             s.push_str("...");
                         }
                         let mut val = egui::RichText::new(s).monospace();
-                        if i < self.xs.data_depth() {
-                            val = val.background_color(Color32::DARK_BLUE);
+                        if i >= self.xs.data_depth() {
+                            val = val.background_color(Color32::DARK_GRAY);
                         }
                         ui.horizontal(|ui| {
                             ui.monospace(format!("{:4}:", i));
