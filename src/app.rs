@@ -124,11 +124,16 @@ impl epi::App for TemplateApp {
         let mut run_clicked = false;
         self.win_size = ctx.used_size();
 
+        let font = FontId::monospace(14.0);
+
         // update style
         let mut vis = Visuals::default();
-
         vis.override_text_color = Some(Color32::from_rgb(0xE6, 0x9F, 0x00));
         ctx.set_visuals(vis);
+
+        let mut style = (*ctx.style()).clone();
+        style.override_font_id = Some(font.clone());
+        ctx.set_style(style);        
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -210,15 +215,15 @@ impl epi::App for TemplateApp {
         });
 
         egui::SidePanel::left("left_panel").show(ctx, |ui| {
-            let glyph_width = ui.text_style_height(&egui::TextStyle::Monospace);
-            let total_cols = self.num_cols * 3;
+            let total_cols = self.num_cols * 3 + 2;
             let total_rows = self.num_rows + 1;
-            let row_height = glyph_width;
+            let glyph_width = ui.fonts().glyph_width(&font, '0');
+            let row_height = ui.fonts().row_height(&font);
             let size1 = Vec2::new(total_cols as f32 * glyph_width,
                 total_rows as f32 * row_height);
-
+            ui.set_min_width(size1.x);
+            
             let xgrid = ui.vertical(|ui|{
-                ui.set_min_size(size1);
                 let bs = self.current_bstr();
                 let mut from = (self.view_start as usize) * 8;
                 let mut it = bs.iter8_unleashed(from);
@@ -258,7 +263,6 @@ impl epi::App for TemplateApp {
 
             ui.separator();
             ui.label(format!("Data Stack: {} items", self.xs.data_depth()));
-            ui.set_max_width(size1.x);
 
             egui::containers::ScrollArea::vertical().show(ui, |ui| {
                 ui.set_min_width(size1.x);
@@ -292,7 +296,7 @@ impl epi::App for TemplateApp {
                 ui.label("Drag and Drop file or click \"Open Binary...\" to start exploring");
                 ui.label("Click \"Run\" or Ctrl+Return to evaluate expression in the code window");
             });
-
+            
             egui::containers::ScrollArea::vertical()
                      .stick_to_bottom().show(ui, |ui| {
                 for s in self.frozen_code.iter() {
@@ -329,13 +333,15 @@ impl epi::App for TemplateApp {
                 }
             }
 
+            if let Some(log) = self.xs.console() {
+                if !log.is_empty() {
+                    self.frozen_code.push(FrozenStr { text: log.take(), log: true });
+                }
+            }
             if run_clicked && !self.live_code.trim().is_empty() {
                 let t = Instant::now();
                 let res = self.xs.eval(&self.live_code);
                 self.frozen_code.push(FrozenStr { text: self.live_code.trim_end().to_owned(), log: false });
-                if let Some(log) = self.xs.console() {
-                    self.frozen_code.push(FrozenStr { text: log.take(), log: true });
-                }
                 if res.is_ok() {
                     let text = format!("OK {:0.3}s", t.elapsed().as_secs_f64());
                     self.frozen_code.push(FrozenStr { text, log: true });
