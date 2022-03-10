@@ -167,36 +167,29 @@ impl epi::App for TemplateApp {
                         self.xs.set_binary_input(s).unwrap();
                     }
                 }
+
                 run_clicked = ui.button("Run").clicked();
                 if ui.input().key_down(egui::Key::Enter) && ui.input().modifiers.ctrl {
                     run_clicked = true;
                 }
-                snapshot_clicked = snapshot_clicked || ui.button("Snapshot").clicked() ||
-                    ui.input().modifiers.ctrl && ui.input().key_released(egui::Key::G);
+                snapshot_clicked = ui.button("Snapshot").clicked();
+                if ui.input().modifiers.ctrl && ui.input().key_released(egui::Key::G) {
+                    snapshot_clicked = true;
+                }
                 if snapshot_clicked {
                     let t = Instant::now();
                     self.backup = Some((self.xs.clone(), self.frozen_code.to_owned()));
                     self.xs.print(&format!("Snapshot {:0.3}s", t.elapsed().as_secs_f64()));
                 }
                 if self.backup.is_some() {
-                    rollback_clicked = rollback_clicked || ui.button("Rollback").clicked()
-                     ||  ui.input().modifiers.ctrl && ui.input().key_down(egui::Key::K);
-                    if rollback_clicked && !self.live_code.trim().is_empty() {
+                    rollback_clicked = ui.button("Rollback").clicked();
+                    if ui.input().modifiers.ctrl && ui.input().key_down(egui::Key::K) {
+                        rollback_clicked  = true;
+                    }
+                    if rollback_clicked {
                         if let Some((xs_old, frozen)) = self.backup.clone() {
                             self.xs = xs_old;
                             self.frozen_code = frozen;
-                        }
-                    }
-                }
-                if run_clicked || rollback_clicked {
-                    if let Ok((w, h, bs)) = get_canvas_data(&mut self.xs) {
-                        let image = egui::ColorImage::from_rgba_unmultiplied([w, h], bs.slice());
-                        self.xs.print(&format!("update canvas {}x{}\n", w, h));
-                        if let Some(tex) = self.canvas.as_mut() {
-                            tex.set(image);
-                        } else {
-                            let tex = ui.ctx().load_texture("canvas-texture", image);
-                            self.canvas = Some(tex);
                         }
                     }
                 }
@@ -347,6 +340,19 @@ impl epi::App for TemplateApp {
                     self.frozen_code.push(FrozenStr { text, log: true });
                 }
                 self.live_code.clear();
+            }
+
+            if run_clicked || rollback_clicked {
+                if let Ok((w, h, bs)) = get_canvas_data(&mut self.xs) {
+                    let image = egui::ColorImage::from_rgba_unmultiplied([w, h], bs.slice());
+                    self.xs.print(&format!("update canvas {}x{}\n", w, h));
+                    if let Some(tex) = self.canvas.as_mut() {
+                        tex.set(image);
+                    } else {
+                        let tex = ui.ctx().load_texture("canvas-texture", image);
+                        self.canvas = Some(tex);
+                    }
+                }
             }
         });
 
