@@ -218,7 +218,7 @@ impl epi::App for TemplateApp {
             let size1 = Vec2::new(total_cols as f32 * glyph_width,
                 total_rows as f32 * row_height);
 
-            let _xgrid = ui.vertical(|ui|{
+            let xgrid = ui.vertical(|ui|{
                 ui.set_min_size(size1);
                 let bs = self.current_bstr();
                 let mut from = (self.view_start as usize) * 8;
@@ -253,9 +253,9 @@ impl epi::App for TemplateApp {
                 }
             });
 
-            //let resp = xgrid.response.interact(egui::Sense::drag());
-            //let v = resp.drag_delta();
-            //let index = 0;//*index = (*index as f32 + v.y).abs() as usize;
+            let resp = xgrid.response.interact(egui::Sense::drag());
+            let v = resp.drag_delta();
+            self.move_view(v.y as isize);
 
             ui.separator();
             ui.label(format!("Data Stack: {} items", self.xs.data_depth()));
