@@ -247,7 +247,7 @@ impl epi::App for TemplateApp {
 
         egui::SidePanel::left("left_panel").show(ctx, |ui| {
             let total_cols = self.num_cols * 3 + 2;
-            let total_rows = self.num_rows + 1;
+            let total_rows = self.num_rows;
             let glyph_width = ui.fonts().glyph_width(&font, '0');
             let row_height = ui.fonts().row_height(&font);
             let size1 = Vec2::new(total_cols as f32 * glyph_width,
@@ -261,9 +261,11 @@ impl epi::App for TemplateApp {
                 let visible_bits = self.num_rows * self.num_cols * 8;
                 let to = bs.end().min(from + visible_bits as usize);
                 let start = bs.start();
-                let header = format!("consumed {},{} of {},{} bytes", start / 8, start % 8,
+                let header = format!("consumed {}.{} of {}.{} bytes", start / 8, start % 8,
                     bs.end() / 8, bs.end() % 8);
                 ui.monospace(header);
+                ui.set_min_height(size1.y * 1.5);
+
                 while from < to {
                     ui.horizontal(|ui| {
                         let addr_text = RichText::new(format!("{:06x}", from / 8)).monospace();
@@ -297,10 +299,11 @@ impl epi::App for TemplateApp {
 
             egui::containers::ScrollArea::vertical().show(ui, |ui| {
                 ui.set_min_width(size1.x);
+                ui.set_max_width(size1.x);
                 for i in 0.. {
                     if let Some(x) = self.xs.get_data(i) {
                         let mut s = self.xs.format_cell(x).unwrap();
-                        if s.len() > total_cols as usize {
+                        if s.chars().count() > total_cols as usize {
                             s.truncate(total_cols as usize - 3);
                             s.push_str("...");
                         }
