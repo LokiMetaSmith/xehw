@@ -53,6 +53,7 @@ impl Default for TemplateApp {
             backup: None,
             bin_future: None,
             setup_focus: true,
+            help_open: false,
         }
     }
 }
@@ -221,6 +222,9 @@ impl epi::App for TemplateApp {
                             self.frozen_code = frozen;
                         }
                     }
+                }
+                if ui.button("Help").clicked() {
+                    self.help_open = true;
                 }
             });
         });
@@ -396,5 +400,16 @@ impl epi::App for TemplateApp {
             }
         });
 
+        if self.help_open {
+            
+            Window::new("Help")
+            .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
+            .open(&mut self.help_open)
+            .resizable(true)
+            .show(ctx, |ui| {
+                ui.label("Drag and Drop file or click \"Open Binary...\" to start exploring");
+                ui.label("Click \"Run\" or Ctrl+Return to evaluate expression in the code window");
+            });
+        }
     }
 }
