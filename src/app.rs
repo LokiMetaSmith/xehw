@@ -20,18 +20,21 @@ pub struct TemplateApp {
     live_code: String,
     win_size: Vec2,
     frozen_code: Vec<FrozenStr>,
+    error_highlight: Xsubstr,
     backup: Option<(Xstate, Vec<FrozenStr>)>,
     bin_future: Option<Pin<BoxFuture>>,
     canvas: Option<egui::TextureHandle>,
     canvas_open: bool,
     canvas_zoom: usize,
     setup_focus: bool,
+    help_open: bool,
 }
 
 #[derive(Clone)]
 struct FrozenStr {
-    text: String,
-    log: bool,
+    text: Xsubstr,
+    fg: Color32,
+    bg: Option<Color32>,
 }
 
 impl Default for TemplateApp {
@@ -47,6 +50,7 @@ impl Default for TemplateApp {
             win_size: Vec2::new(640.0, 480.0),
             live_code: String::new(),
             frozen_code: Vec::new(),
+            error_highlight: Xstr::from("").into(),
             canvas: None,
             canvas_open: true,
             canvas_zoom: 1,
@@ -151,6 +155,7 @@ impl epi::App for TemplateApp {
         let mut snapshot_clicked = false;
         let mut rollback_clicked = false;
         let mut run_clicked = false;
+        let mut debug_clicked = false;
         let mut zoom_changed = false;
         self.win_size = ctx.used_size();
 
@@ -198,12 +203,11 @@ impl epi::App for TemplateApp {
                     }
                 }
 
-                run_clicked = ui.button("Run").clicked();
-                if ui.input().key_down(egui::Key::Enter) && ui.input().modifiers.ctrl {
+                if ui.input().modifiers.ctrl && ui.input().key_down(egui::Key::Enter)  {
                     run_clicked = true;
                 }
                 snapshot_clicked = ui.button("Snapshot").clicked();
-                if ui.input().modifiers.ctrl && ui.input().key_released(egui::Key::G) {
+                if ui.input().modifiers.ctrl && ui.input().key_down(egui::Key::G) {
                     snapshot_clicked = true;
                 }
                 if snapshot_clicked {
@@ -329,20 +333,17 @@ impl epi::App for TemplateApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = 2.0;
             let mut code_has_focus = false;
-
-            ui.collapsing("Help", |ui| {
-                ui.label("Drag and Drop file or click \"Open Binary...\" to start exploring");
-                ui.label("Click \"Run\" or Ctrl+Return to evaluate expression in the code window");
-            });
             
             egui::containers::ScrollArea::vertical()
                      .stick_to_bottom().show(ui, |ui| {
-                for s in self.frozen_code.iter() {
-                    let richtext = RichText::new(s.text.to_owned())
+                for x in self.frozen_code.iter() {
+                    let mut richtext = RichText::new(x.text.to_string())
                         .monospace()
-                        .color(if s.log {egui::Color32::WHITE} else {egui::Color32::GRAY});
-                    let fl = Label::new(richtext);
-                    ui.add(fl);
+                        .color(x.fg);
+                    if let Some(bg) = x.bg {
+                        richtext = richtext.background_color(bg);
+                    }
+                    ui.add(Label::new(richtext));
                 }
                 let code = egui::TextEdit::multiline(&mut self.live_code)
                     .desired_width(f32::INFINITY)
@@ -356,6 +357,15 @@ impl epi::App for TemplateApp {
                 code_has_focus = res.has_focus();
             });
             
+            ui.horizontal(|ui| {
+                if ui.button("Run").clicked() {
+                    run_clicked = true;
+                }
+                if ui.button("Debug").clicked() {
+                    debug_clicked = true;
+                }
+            });
+
             if !code_has_focus {
                 if ctx.input().key_pressed(egui::Key::ArrowUp) {
                     self.move_view(-1);
@@ -373,20 +383,36 @@ impl epi::App for TemplateApp {
 
             if let Some(log) = self.xs.console() {
                 if !log.is_empty() {
-                    self.frozen_code.push(FrozenStr { text: log.take(), log: true });
+                    let text = log.take().into();
+                    self.frozen_code.push(FrozenStr { text, fg: Color32::GRAY, bg: None});
                 }
             }
-            if run_clicked && !self.live_code.trim().is_empty() {
+            if (run_clicked || debug_clicked) && !self.live_code.trim_end().is_empty() {
                 let t = Instant::now();
-                let res = self.xs.eval(&self.live_code);
-                self.frozen_code.push(FrozenStr { text: self.live_code.trim_end().to_owned(), log: false });
+                let xsrc = Xstr::from(self.live_code.trim_end());
+                let res = if run_clicked {
+                    self.xs.evalxstr(xsrc.clone())
+                } else {
+                    self.xs.loadxstr(xsrc.clone())
+                };
+                let mut err_line = None;
+                if res.is_err() {
+                    err_line = self.xs.last_error().map(|e| e.1.whole_line);
+                }
+                for (line, text) in xeh::lex::XstrLines::new(xsrc).enumerate() {
+                    let bg = if Some(&text) == err_line.as_ref() {
+                        Some(Color32::RED)
+                    } else {
+                        None
+                    };
+                    self.frozen_code.push(FrozenStr{text, fg: Color32::WHITE, bg});
+                }
                 if res.is_ok() {
-                    let text = format!("OK {:0.3}s", t.elapsed().as_secs_f64());
-                    self.frozen_code.push(FrozenStr { text, log: true });
+                    let text = format!("OK {:0.3}s", t.elapsed().as_secs_f64()).into();
+                    self.frozen_code.push(FrozenStr{text,fg:Color32::GRAY,bg:None});
                 }
                 self.live_code.clear();
             }
-
             if run_clicked || rollback_clicked || zoom_changed {
                 if let Ok((w, h, bs)) = get_canvas_data(&mut self.xs) {
                     let image = zoom_image(self.canvas_zoom, w, h, bs.slice());
@@ -401,7 +427,6 @@ impl epi::App for TemplateApp {
         });
 
         if self.help_open {
-            
             Window::new("Help")
             .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
             .open(&mut self.help_open)
