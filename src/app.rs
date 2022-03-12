@@ -2,6 +2,7 @@ use eframe::{egui, epi};
 use eframe::egui::*;
 
 use xeh::prelude::*;
+use xeh::state::TokenInfo;
 
 #[cfg(target_arch = "wasm32")]
 type Instant = instant::Instant;
@@ -20,7 +21,8 @@ pub struct TemplateApp {
     live_code: String,
     win_size: Vec2,
     frozen_code: Vec<FrozenStr>,
-    error_highlight: Xsubstr,
+    highlight_line: Option<TokenInfo>,
+    debug_token: Option<TokenInfo>,
     backup: Option<(Xstate, Vec<FrozenStr>)>,
     bin_future: Option<Pin<BoxFuture>>,
     canvas: Option<egui::TextureHandle>,
@@ -32,11 +34,8 @@ pub struct TemplateApp {
 
 #[derive(Clone)]
 enum FrozenStr {
-    Code(),
-
-    text: Xsubstr,
-    fg: Color32,
-    bg: Option<Color32>,
+    Code(Xsubstr),
+    Log(String),
 }
 
 impl Default for TemplateApp {
@@ -52,7 +51,8 @@ impl Default for TemplateApp {
             win_size: Vec2::new(640.0, 480.0),
             live_code: String::new(),
             frozen_code: Vec::new(),
-            error_highlight: Xstr::from("").into(),
+            highlight_line: None,
+            debug_token: None,
             canvas: None,
             canvas_open: true,
             canvas_zoom: 1,
@@ -339,13 +339,30 @@ impl epi::App for TemplateApp {
             egui::containers::ScrollArea::vertical()
                      .stick_to_bottom().show(ui, |ui| {
                 for x in self.frozen_code.iter() {
-                    let mut richtext = RichText::new(x.text.to_string())
-                        .monospace()
-                        .color(x.fg);
-                    if let Some(bg) = x.bg {
-                        richtext = richtext.background_color(bg);
+                    match x {
+                        FrozenStr::Log(s) => {
+                            let rich = RichText::new(s.to_string())
+                                .monospace().color(Color32::GRAY);
+                            ui.add(Label::new(rich));
+                        }
+                        FrozenStr::Code(s) => {
+                            let mut rich = RichText::new(s.to_string())
+                                .monospace()
+                                .color(Color32::WHITE);
+                            if Some(s) == self.highlight_line.as_ref().map(|t| &t.whole_line) {
+                                rich = rich.background_color(Color32::RED);
+                            }
+                            ui.add(Label::new(rich));
+                            if Some(s) == self.debug_token.as_ref().map(|t| &t.whole_line) {
+                                let col = self.debug_token.as_ref().map(|t| t.col).unwrap();
+                                let text = format!("{:->1$}", '^', col + 1);
+                                let mut rich2 = RichText::new(text)
+                                    .monospace()
+                                    .color(Color32::WHITE);
+                                ui.add(Label::new(rich2));
+                            }
+                        }
                     }
-                    ui.add(Label::new(richtext));
                 }
                 let code = egui::TextEdit::multiline(&mut self.live_code)
                     .desired_width(f32::INFINITY)
@@ -386,7 +403,7 @@ impl epi::App for TemplateApp {
             if let Some(log) = self.xs.console() {
                 if !log.is_empty() {
                     let text = log.take().into();
-                    self.frozen_code.push(FrozenStr { text, fg: Color32::GRAY, bg: None});
+                    self.frozen_code.push(FrozenStr::Log(text));
                 }
             }
             if (run_clicked || debug_clicked) && !self.live_code.trim_end().is_empty() {
@@ -397,21 +414,16 @@ impl epi::App for TemplateApp {
                 } else {
                     self.xs.loadxstr(xsrc.clone())
                 };
-                let mut err_line = None;
                 if res.is_err() {
-                    err_line = self.xs.last_error().map(|e| e.1.whole_line);
+                    self.highlight_line = self.xs.last_error().map(|x| x.1);
+                    self.debug_token = self.highlight_line.clone();
                 }
-                for (line, text) in xeh::lex::XstrLines::new(xsrc).enumerate() {
-                    let bg = if Some(&text) == err_line.as_ref() {
-                        Some(Color32::RED)
-                    } else {
-                        None
-                    };
-                    self.frozen_code.push(FrozenStr{text, fg: Color32::WHITE, bg});
+                for s in xeh::lex::XstrLines::new(xsrc) {
+                    self.frozen_code.push(FrozenStr::Code(s))
                 }
                 if res.is_ok() {
                     let text = format!("OK {:0.3}s", t.elapsed().as_secs_f64()).into();
-                    self.frozen_code.push(FrozenStr{text,fg:Color32::GRAY,bg:None});
+                    self.frozen_code.push(FrozenStr::Log(text));
                 }
                 self.live_code.clear();
             }
