@@ -31,7 +31,9 @@ pub struct TemplateApp {
 }
 
 #[derive(Clone)]
-struct FrozenStr {
+enum FrozenStr {
+    Code(),
+
     text: Xsubstr,
     fg: Color32,
     bg: Option<Color32>,
