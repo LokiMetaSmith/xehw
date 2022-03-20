@@ -237,7 +237,7 @@ impl epi::App for TemplateApp {
 
         egui::Window::new("Canvas")
         .id(Id::new("canvas-window"))
-        .default_pos([0.0, 500.0])
+        .anchor(Align2::LEFT_BOTTOM,[0.0, 0.0])
         .open(&mut self.canvas_open)
         .show(ctx, |ui| {
             let old_zoom = self.canvas_zoom;
