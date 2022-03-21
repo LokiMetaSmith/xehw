@@ -2,7 +2,7 @@ use eframe::{egui, epi};
 use eframe::egui::*;
 
 use xeh::prelude::*;
-use xeh::state::TokenInfo;
+use xeh::state::{ErrorContext, TokenLocation};
 
 #[cfg(target_arch = "wasm32")]
 type Instant = instant::Instant;
@@ -21,14 +21,16 @@ pub struct TemplateApp {
     live_code: String,
     win_size: Vec2,
     frozen_code: Vec<FrozenStr>,
-    highlight_line: Option<TokenInfo>,
-    debug_token: Option<TokenInfo>,
+    highlight_line: Option<ErrorContext>,
+    debug_token: Option<TokenLocation>,
+    rdebug_enabled: bool,
     backup: Option<(Xstate, Vec<FrozenStr>)>,
     bin_future: Option<Pin<BoxFuture>>,
     canvas: Option<egui::TextureHandle>,
     canvas_open: bool,
     canvas_zoom: usize,
     setup_focus: bool,
+    bytecode_open: bool,
     help_open: bool,
 }
 
@@ -59,6 +61,8 @@ impl Default for TemplateApp {
             backup: None,
             bin_future: None,
             setup_focus: true,
+            rdebug_enabled: true,
+            bytecode_open: true,
             help_open: false,
         }
     }
@@ -88,15 +92,13 @@ impl Wake for MyWaker {
     }
 }
 
-fn get_canvas_data(xs: &mut Xstate) -> Xresult1<(usize, usize, Xbitstr)> {
-    xs.eval_word("d2-width")?;
-    let w = xs.pop_data()?.to_usize()?;
-    xs.eval_word("d2-height")?;
-    let h = xs.pop_data()?.to_usize()?;
-    if w > 0 && h > 0 {
-        xs.eval_word("d2-capture-rgba")?;
-        let bs = xs.pop_data()?.to_bitstring()?;
-        Ok((w, h, bs))
+fn get_canvas_data(xs: &mut Xstate) -> Xresult1<(usize, usize, Vec<u8>)> {
+    let c = xs.get_var_value("d2-context")?;
+    let (w, h) = xeh::d2_plugin::size(c.clone())?;
+    if w > 0 && h  > 0 {
+        let mut buf = Vec::new();
+        xeh::d2_plugin::copy_rgba_data(c.clone(), &mut buf)?;
+        Ok((w, h, buf))
     } else {
         Err(Xerr::NotFound)
     }
@@ -159,6 +161,8 @@ impl epi::App for TemplateApp {
         let mut run_clicked = false;
         let mut debug_clicked = false;
         let mut zoom_changed = false;
+        let mut next_clicked = false;
+        let mut rnext_clicked = false;
         self.win_size = ctx.used_size();
 
         let font = FontId::monospace(14.0);
@@ -208,6 +212,19 @@ impl epi::App for TemplateApp {
                 if ui.input().modifiers.ctrl && ui.input().key_down(egui::Key::Enter)  {
                     run_clicked = true;
                 }
+
+                if ui.button("Run").clicked() {
+                    run_clicked = true;
+                }
+                if ui.button("Debug").clicked() {
+                    debug_clicked = true;
+                }
+                if ui.button("Next").clicked() {
+                    next_clicked = true;
+                }
+                if self.rdebug_enabled && ui.button("Back").clicked() {
+                    rnext_clicked = true;
+                }
                 snapshot_clicked = ui.button("Snapshot").clicked();
                 if ui.input().modifiers.ctrl && ui.input().key_down(egui::Key::G) {
                     snapshot_clicked = true;
@@ -229,8 +246,32 @@ impl epi::App for TemplateApp {
                         }
                     }
                 }
+                if ui.checkbox(&mut self.rdebug_enabled, "Reverse Debugging").changed() {
+                    if self.rdebug_enabled {
+                        self.xs.start_reverse_debugging();
+                    } else {
+                        self.xs.stop_reverse_debugging();
+                    }
+                }
                 if ui.button("Help").clicked() {
                     self.help_open = true;
+                }
+            });
+        });
+
+        egui::Window::new("Bytecode")
+        .id(Id::new("bytecode-window"))
+        .default_size([200.0, 200.0])
+        .open(&mut self.bytecode_open)
+        .vscroll(true)
+        .show(ctx, |ui| {
+            ui.vertical(|ui| {
+                for (ip, op) in self.xs.bytecode().iter().enumerate() {
+                    let mut rich = RichText::new(format!("{}: {:?}", ip, op));
+                    if ip == self.xs.ip() {
+                        rich = rich.background_color(Color32::LIGHT_GRAY);
+                    }
+                    ui.add(Label::new(rich));
                 }
             });
         });
@@ -349,17 +390,20 @@ impl epi::App for TemplateApp {
                             let mut rich = RichText::new(s.to_string())
                                 .monospace()
                                 .color(Color32::WHITE);
-                            if Some(s) == self.highlight_line.as_ref().map(|t| &t.whole_line) {
-                                rich = rich.background_color(Color32::RED);
+                            if let Some(errctx) = self.highlight_line.as_ref() {
+                                if Xsubstr::shallow_eq(&errctx.location.whole_line, s) {
+                                    rich = rich.background_color(Color32::RED);
+                                }
                             }
                             ui.add(Label::new(rich));
-                            if Some(s) == self.debug_token.as_ref().map(|t| &t.whole_line) {
-                                let col = self.debug_token.as_ref().map(|t| t.col).unwrap();
-                                let text = format!("{:->1$}", '^', col + 1);
-                                let mut rich2 = RichText::new(text)
-                                    .monospace()
-                                    .color(Color32::WHITE);
-                                ui.add(Label::new(rich2));
+                            if let Some(dbg) = self.debug_token.as_ref() {
+                                if Xsubstr::shallow_eq(&dbg.whole_line, s) {
+                                    let text = format!("{:->1$}", '^', dbg.col + 1);
+                                    let rich2 = RichText::new(text)
+                                        .monospace()
+                                        .color(Color32::WHITE);
+                                    ui.add(Label::new(rich2));
+                                }
                             }
                         }
                     }
@@ -376,15 +420,6 @@ impl epi::App for TemplateApp {
                 code_has_focus = res.has_focus();
             });
             
-            ui.horizontal(|ui| {
-                if ui.button("Run").clicked() {
-                    run_clicked = true;
-                }
-                if ui.button("Debug").clicked() {
-                    debug_clicked = true;
-                }
-            });
-
             if !code_has_focus {
                 if ctx.input().key_pressed(egui::Key::ArrowUp) {
                     self.move_view(-1);
@@ -406,17 +441,33 @@ impl epi::App for TemplateApp {
                     self.frozen_code.push(FrozenStr::Log(text));
                 }
             }
-            if (run_clicked || debug_clicked) && !self.live_code.trim_end().is_empty() {
+
+            if next_clicked || rnext_clicked {
+                let res = if next_clicked { self.xs.next() } else { self.xs.rnext() };
+                if let Err(err) = res {
+                    let loc = self.xs.current_location();
+                    self.debug_token = loc.clone();
+                    self.highlight_line = loc.map(|location| ErrorContext {
+                        err,
+                        location,
+                    });
+                } else {
+                    self.debug_token = self.xs.current_location();
+                    self.highlight_line = None;
+                }
+            } else if (run_clicked || debug_clicked) && !self.live_code.trim_end().is_empty() {
                 let t = Instant::now();
                 let xsrc = Xstr::from(self.live_code.trim_end());
                 let res = if run_clicked {
                     self.xs.evalxstr(xsrc.clone())
                 } else {
-                    self.xs.loadxstr(xsrc.clone())
+                    self.xs.compile_xstr(xsrc.clone())
                 };
                 if res.is_err() {
-                    self.highlight_line = self.xs.last_error().map(|x| x.1);
-                    self.debug_token = self.highlight_line.clone();
+                    self.highlight_line = self.xs.last_error().clone();
+                    self.debug_token = self.highlight_line.as_ref().map(|x| x.location.clone());
+                } else if debug_clicked {
+                    self.debug_token = self.xs.current_location();
                 }
                 for s in xeh::lex::XstrLines::new(xsrc) {
                     self.frozen_code.push(FrozenStr::Code(s))
@@ -427,9 +478,10 @@ impl epi::App for TemplateApp {
                 }
                 self.live_code.clear();
             }
-            if run_clicked || rollback_clicked || zoom_changed {
-                if let Ok((w, h, bs)) = get_canvas_data(&mut self.xs) {
-                    let image = zoom_image(self.canvas_zoom, w, h, bs.slice());
+
+            if next_clicked || rnext_clicked || run_clicked || rollback_clicked || zoom_changed {
+                if let Ok((w, h, buf)) = get_canvas_data(&mut self.xs) {
+                    let image = zoom_image(self.canvas_zoom, w, h, &buf);
                     if let Some(tex) = self.canvas.as_mut() {
                         tex.set(image);
                     } else {
