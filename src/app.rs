@@ -267,7 +267,8 @@ impl epi::App for TemplateApp {
         .show(ctx, |ui| {
             ui.vertical(|ui| {
                 for (ip, op) in self.xs.bytecode().iter().enumerate() {
-                    let mut rich = RichText::new(format!("{}: {:?}", ip, op));
+                    let optext = self.xs.fmt_opcode(ip, op);
+                    let mut rich = RichText::new(format!("{:05x}: {}", ip, optext));
                     if ip == self.xs.ip() {
                         rich = rich.background_color(Color32::LIGHT_GRAY);
                     }
