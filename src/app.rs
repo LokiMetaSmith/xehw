@@ -93,11 +93,10 @@ impl Wake for MyWaker {
 }
 
 fn get_canvas_data(xs: &mut Xstate) -> Xresult1<(usize, usize, Vec<u8>)> {
-    let c = xs.get_var_value("d2-context")?;
-    let (w, h) = xeh::d2_plugin::size(c.clone())?;
+    let (w, h) = xeh::d2_plugin::size(xs)?;
     if w > 0 && h  > 0 {
         let mut buf = Vec::new();
-        xeh::d2_plugin::copy_rgba_data(c.clone(), &mut buf)?;
+        xeh::d2_plugin::copy_rgba_data(xs, &mut buf)?;
         Ok((w, h, buf))
     } else {
         Err(Xerr::NotFound)
