@@ -61,7 +61,7 @@ impl Default for TemplateApp {
             backup: None,
             bin_future: None,
             setup_focus: true,
-            rdebug_enabled: true,
+            rdebug_enabled: false,
             bytecode_open: true,
             help_open: false,
         }
@@ -77,6 +77,14 @@ impl TemplateApp {
 
     fn current_bstr(&self) -> Xbitstr {
         self.xs.get_var_value("bitstr/input").unwrap().clone().to_bitstring().unwrap()
+    }
+
+    fn binary_dropped(&mut self, s: Xbitstr) {
+        self.xs.set_binary_input(s).unwrap();
+        if self.backup.is_none() {
+            // initial snapshot
+            self.backup = Some((self.xs.clone(), self.frozen_code.to_owned()));
+        }
     }
 }
 
@@ -196,15 +204,15 @@ impl epi::App for TemplateApp {
                         Poll::Pending => (),
                         Poll::Ready(data) => {
                             let s = Xbitstr::from(data);
-                            self.xs.set_binary_input(s).unwrap();
                             self.bin_future.take();
+                            self.binary_dropped(s);
                         }
                     }
                 }
                 if let Some(d) = ctx.input().raw.dropped_files.first() {
                     if let Some(data) = &d.bytes {
                         let s = Xbitstr::from(data.as_ref().to_owned());
-                        self.xs.set_binary_input(s).unwrap();
+                        self.binary_dropped(s);
                     }
                 }
 
@@ -247,9 +255,9 @@ impl epi::App for TemplateApp {
                 }
                 if ui.checkbox(&mut self.rdebug_enabled, "Reverse Debugging").changed() {
                     if self.rdebug_enabled {
-                        self.xs.start_reverse_debugging();
+                        self.xs.start_recording();
                     } else {
-                        self.xs.stop_reverse_debugging();
+                        self.xs.stop_recording();
                     }
                 }
                 if ui.button("Help").clicked() {
@@ -260,10 +268,11 @@ impl epi::App for TemplateApp {
 
         egui::Window::new("Bytecode")
         .id(Id::new("bytecode-window"))
-        .default_size([200.0, 200.0])
+        .anchor(Align2::RIGHT_BOTTOM, [0.0, 0.0])
         .open(&mut self.bytecode_open)
         .vscroll(true)
         .show(ctx, |ui| {
+            ui.label(format!("ip={}", self.xs.ip()));
             ui.vertical(|ui| {
                 for (ip, op) in self.xs.bytecode().iter().enumerate() {
                     let optext = self.xs.fmt_opcode(ip, op);
@@ -312,7 +321,7 @@ impl epi::App for TemplateApp {
                 let visible_bits = self.num_rows * self.num_cols * 8;
                 let to = bs.end().min(from + visible_bits as usize);
                 let start = bs.start();
-                let header = format!("consumed {}.{} of {}.{} bytes", start / 8, start % 8,
+                let header = format!("consumed {},{} of {},{} bytes", start / 8, start % 8,
                     bs.end() / 8, bs.end() % 8);
                 ui.monospace(header);
                 ui.set_min_height(size1.y * 1.5);
