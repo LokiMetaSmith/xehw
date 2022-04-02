@@ -49,7 +49,7 @@ impl Default for TemplateApp {
             xs,
             view_start: 0,
             num_rows: 10,
-            num_cols: 16,
+            num_cols: 8,
             win_size: Vec2::new(640.0, 480.0),
             live_code: String::new(),
             frozen_code: Vec::new(),
@@ -275,7 +275,7 @@ impl epi::App for TemplateApp {
             ui.label(format!("ip={}", self.xs.ip()));
             ui.vertical(|ui| {
                 for (ip, op) in self.xs.bytecode().iter().enumerate() {
-                    let optext = self.xs.fmt_opcode(ip, op);
+                    let optext = self.xs.fmt_opcode(ip, op);    
                     let mut rich = RichText::new(format!("{:05x}: {}", ip, optext));
                     if ip == self.xs.ip() {
                         rich = rich.background_color(Color32::LIGHT_GRAY);
@@ -333,18 +333,23 @@ impl epi::App for TemplateApp {
                         ui.separator();
                         let xspacing = ui.spacing_mut().item_spacing;
                         ui.spacing_mut().item_spacing *= 0.5;
+                        let mut ascii = String::new();
+                        ascii.push_str(" ");
                         for _ in 0..self.num_cols {
-                            if let Some((val, n)) = it.next() {
+                            if let Some((val, n)) = it.next() { 
                                 let mut text = RichText::new(&format!("{:02x}", val)).monospace();
                                 if from < start {
                                     text = text.color(Color32::DARK_GRAY);
                                 }
                                 ui.add(Label::new(text));
+                                let c= char::from_u32(val as u32).unwrap();
+                                ascii.push(if c.is_ascii_graphic() { c } else { '.' });
                                 from += n as usize;
                             } else {
                                 break;
                             }
                         }
+                        ui.add(Label::new(ascii));
                         ui.spacing_mut().item_spacing = xspacing;
                     });
                 }
