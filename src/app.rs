@@ -18,7 +18,8 @@ pub struct TemplateApp {
     view_start: isize,
     num_rows: isize,
     num_cols: isize,
-    live_code: String,
+    user_code: String,
+    repl_code: String,
     win_size: Vec2,
     frozen_code: Vec<FrozenStr>,
     highlight_line: Option<ErrorContext>,
@@ -51,7 +52,8 @@ impl Default for TemplateApp {
             num_rows: 10,
             num_cols: 8,
             win_size: Vec2::new(640.0, 480.0),
-            live_code: String::new(),
+            user_code: String::new(),
+            repl_code: String::new(),
             frozen_code: Vec::new(),
             highlight_line: None,
             debug_token: None,
@@ -220,18 +222,6 @@ impl epi::App for TemplateApp {
                     run_clicked = true;
                 }
 
-                if ui.button("Run").clicked() {
-                    run_clicked = true;
-                }
-                if ui.button("Debug").clicked() {
-                    debug_clicked = true;
-                }
-                if ui.button("Next").clicked() {
-                    next_clicked = true;
-                }
-                if self.rdebug_enabled && ui.button("Back").clicked() {
-                    rnext_clicked = true;
-                }
                 snapshot_clicked = ui.button("Snapshot").clicked();
                 if ui.input().modifiers.ctrl && ui.input().key_down(egui::Key::G) {
                     snapshot_clicked = true;
@@ -389,8 +379,30 @@ impl epi::App for TemplateApp {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = 2.0;
-            let mut code_has_focus = false;
-            
+            let mut repl_has_focus = false;
+            let mut repl_eval_clicked = false;
+
+            ui.horizontal(|ui| {
+                if ui.button("Run").clicked() {
+                    run_clicked = true;
+                }
+                if ui.button("Debug").clicked() {
+                    debug_clicked = true;
+                }
+                if ui.button("Next").clicked() {
+                    next_clicked = true;
+                }
+                if self.rdebug_enabled && ui.button("Back").clicked() {
+                    rnext_clicked = true;
+                }
+            });
+            let user_edit = egui::TextEdit::multiline(&mut self.user_code)
+                    .desired_width(f32::INFINITY)
+                    .desired_rows(25)
+                    .code_editor()
+                    .id(Id::new("code"));
+                ui.add(user_edit);
+
             egui::containers::ScrollArea::vertical()
                      .stick_to_bottom().show(ui, |ui| {
                 for x in self.frozen_code.iter() {
@@ -422,19 +434,26 @@ impl epi::App for TemplateApp {
                         }
                     }
                 }
-                let code = egui::TextEdit::multiline(&mut self.live_code)
+
+                let code = egui::TextEdit::multiline(&mut self.repl_code)
+                    .desired_rows(1)
                     .desired_width(f32::INFINITY)
                     .code_editor()
-                    .id(Id::new("code"));
-                let res = ui.add(code);
-                if self.setup_focus {
-                    res.request_focus();
-                    self.setup_focus = false;
-                }
-                code_has_focus = res.has_focus();
+                    .id(Id::new("repl"));
+                ui.horizontal(|ui| {
+                    let res = ui.add(code);
+                    if self.setup_focus {
+                        res.request_focus();
+                        self.setup_focus = false;
+                    }
+                    repl_has_focus = res.has_focus();
+                    if ui.button("Evaluate").clicked() {
+                        repl_eval_clicked = true;
+                    }
+                });
             });
             
-            if !code_has_focus {
+            if !repl_has_focus {
                 if ctx.input().key_pressed(egui::Key::ArrowUp) {
                     self.move_view(-1);
                 }
@@ -469,9 +488,9 @@ impl epi::App for TemplateApp {
                     self.debug_token = self.xs.current_location();
                     self.highlight_line = None;
                 }
-            } else if (run_clicked || debug_clicked) && !self.live_code.trim_end().is_empty() {
+            } else if (run_clicked || debug_clicked) && !self.repl_code.trim_end().is_empty() {
                 let t = Instant::now();
-                let xsrc = Xstr::from(self.live_code.trim_end());
+                let xsrc = Xstr::from(self.repl_code.trim_end());
                 let res = if run_clicked {
                     self.xs.evalxstr(xsrc.clone())
                 } else {
@@ -490,7 +509,7 @@ impl epi::App for TemplateApp {
                     let text = format!("OK {:0.3}s", t.elapsed().as_secs_f64()).into();
                     self.frozen_code.push(FrozenStr::Log(text));
                 }
-                self.live_code.clear();
+                self.repl_code.clear();
             }
 
             if next_clicked || rnext_clicked || run_clicked || rollback_clicked || zoom_changed {
