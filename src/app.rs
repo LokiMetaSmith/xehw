@@ -30,7 +30,7 @@ pub struct TemplateApp {
     canvas: Option<egui::TextureHandle>,
     canvas_zoom: f32,
     canvas_offs: Vec2,
-    canvas_interactive: bool,
+    canvas_interaction: bool,
     setup_focus: bool,
     bytecode_open: bool,
     help_open: bool,
@@ -59,7 +59,7 @@ impl Default for TemplateApp {
             highlight_line: None,
             debug_token: None,
             canvas: None,
-            canvas_interactive: false,
+            canvas_interaction: false,
             canvas_zoom: 1.0,
             canvas_offs: vec2(0.0, 0.0),
             backup: None,
@@ -91,8 +91,8 @@ impl TemplateApp {
         }
     }
 
-    fn canvas(&mut self, ctx: &egui::Context) {
-        if self.canvas_interactive {
+    fn canvas(&mut self, ctx: &egui::Context, interactive: bool) {
+        if interactive {
             let zd = ctx.input().zoom_delta();
             if (zd - 1.0).abs() > 0.01 {
                 let z = self.canvas_zoom + (zd - 1.0);
@@ -130,20 +130,18 @@ impl TemplateApp {
         let mut eval_clicked = false;
         let mut run_clicked = false;
         let mut debug_clicked = false;
-        let mut zoom_changed = false;
         let mut next_clicked = false;
         let mut rnext_clicked = false;
         self.win_size = ctx.used_size();
         
         let font = FontId::monospace(14.0);
         // update style
-        let mut vis = Visuals::default();
-        vis.override_text_color = Some(Color32::from_rgb(0xE6, 0x9F, 0x00));
-        ctx.set_visuals(vis);
-
         let mut style = (*ctx.style()).clone();
+        style.visuals.override_text_color = Some(Color32::from_rgb(0xE6, 0x9F, 0x00));
         style.override_font_id = Some(font.clone());
-        ctx.set_style(style);        
+        style.visuals.widgets.noninteractive.bg_fill = Color32::TRANSPARENT;
+        //style.visuals.widgets.noninteractive.fg_stroke.color = Color32::from_rgb(0xE6, 0x9F, 0x00);
+        ctx.set_style(style);
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -314,7 +312,6 @@ impl TemplateApp {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-
             ui.spacing_mut().item_spacing.y = 2.0;
             let mut repl_has_focus = false;
 
@@ -458,7 +455,7 @@ impl TemplateApp {
                 self.repl_code.clear();
             }
 
-            if next_clicked || rnext_clicked || eval_clicked || rollback_clicked || zoom_changed {
+            if next_clicked || rnext_clicked || eval_clicked || rollback_clicked  {
                 if let Ok((w, h, buf)) = get_canvas_data(&mut self.xs) {
                     let image = egui::ColorImage::from_rgba_unmultiplied([w, h], &buf);
                     if let Some(tex) = self.canvas.as_mut() {
@@ -488,6 +485,8 @@ use std::future::{Future};
 use std::task::{Poll, Context, Wake};
 use std::pin::Pin;
 use std::sync::Arc;
+
+use crate::hotkeys;
 
 struct MyWaker();
 
@@ -535,6 +534,12 @@ impl epi::App for TemplateApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, _frame: &epi::Frame) {
-        self.canvas(ctx);
+        if hotkeys::interactive_canvas_pressed(ctx) {
+            self.canvas_interaction = !self.canvas_interaction;
+        }
+        self.canvas(ctx, self.canvas_interaction);
+        if !self.canvas_interaction {
+            self.editor(ctx);
+        }
     }
 }
