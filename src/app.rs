@@ -28,8 +28,9 @@ pub struct TemplateApp {
     backup: Option<(Xstate, Vec<FrozenStr>)>,
     bin_future: Option<Pin<BoxFuture>>,
     canvas: Option<egui::TextureHandle>,
-    canvas_open: bool,
-    canvas_zoom: usize,
+    canvas_zoom: f32,
+    canvas_offs: Vec2,
+    canvas_interactive: bool,
     setup_focus: bool,
     bytecode_open: bool,
     help_open: bool,
@@ -58,8 +59,9 @@ impl Default for TemplateApp {
             highlight_line: None,
             debug_token: None,
             canvas: None,
-            canvas_open: true,
-            canvas_zoom: 1,
+            canvas_interactive: false,
+            canvas_zoom: 1.0,
+            canvas_offs: vec2(0.0, 0.0),
             backup: None,
             bin_future: None,
             setup_focus: true,
@@ -87,6 +89,39 @@ impl TemplateApp {
             // initial snapshot
             self.backup = Some((self.xs.clone(), self.frozen_code.to_owned()));
         }
+    }
+
+    fn canvas(&mut self, ctx: &egui::Context) {
+        if self.canvas_interactive {
+            let zd = ctx.input().zoom_delta();
+            if (zd - 1.0).abs() > 0.01 {
+                let z = self.canvas_zoom + (zd - 1.0);
+                self.canvas_zoom = z.min(8.0).max(0.1);
+            }
+            if ctx.input().pointer.any_down() {
+                self.canvas_offs += ctx.input().pointer.delta();
+            }
+        }
+        if self.canvas.is_none() {
+            let t = ctx.load_texture("1", ColorImage::example());
+            self.canvas = Some(t);
+        }
+        CentralPanel::default().show(ctx, |ui| {
+            ui.with_layer_id(LayerId::background(), |ui| {
+                if let Some(texture) = self.canvas.as_ref() {
+                    let sx = self.canvas_offs.x;
+                    let sy = self.canvas_offs.y;
+                    let zoom = self.canvas_zoom;
+                    let size = texture.size_vec2();
+                    let img = egui::Image::new(texture, size);
+                    let rect = Rect {
+                        min: pos2(sx, sy),
+                        max: pos2(sx + size.x * zoom, sy + size.y * zoom)
+                    };
+                    img.paint_at(ui, rect);
+                }
+            });
+        });
     }
 
     fn editor(&mut self, ctx: &egui::Context) {
@@ -196,26 +231,6 @@ impl TemplateApp {
             });
         });
 
-        egui::Window::new("Canvas")
-        .id(Id::new("canvas-window"))
-        .anchor(Align2::LEFT_BOTTOM,[0.0, 0.0])
-        .open(&mut self.canvas_open)
-        .show(ctx, |ui| {
-            let old_zoom = self.canvas_zoom;
-            ui.horizontal(|ui| {
-                ui.radio_value(&mut self.canvas_zoom, 1, "x1");
-                ui.radio_value(&mut self.canvas_zoom, 2, "x2");
-                ui.radio_value(&mut self.canvas_zoom, 4, "x4");
-            });
-            zoom_changed = old_zoom != self.canvas_zoom;
-            if let Some(texture) = self.canvas.as_ref() {
-                ui.label(format!("Canvas {}x{}", texture.size_vec2().x, texture.size_vec2().y));
-                ui.add(egui::Image::new(texture, texture.size_vec2()));
-            } else {
-                ui.label("Canvas is empty");
-            }
-        });
-
         egui::SidePanel::left("left_panel").show(ctx, |ui| {
             let total_cols = self.num_cols * 3 + 2;
             let total_rows = self.num_rows;
@@ -299,17 +314,6 @@ impl TemplateApp {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.with_layer_id(LayerId::background(), |ui| {
-                if let Some(texture) = self.canvas.as_ref() {
-                    let size = texture.size_vec2();
-                    let img = egui::Image::new(texture, size);
-                    let rect = Rect {
-                        min: pos2(0.0, 0.0),
-                        max: pos2(size.x, size.y)
-                    };
-                    img.paint_at(ui, rect);
-                }
-            });
 
             ui.spacing_mut().item_spacing.y = 2.0;
             let mut repl_has_focus = false;
@@ -456,7 +460,7 @@ impl TemplateApp {
 
             if next_clicked || rnext_clicked || eval_clicked || rollback_clicked || zoom_changed {
                 if let Ok((w, h, buf)) = get_canvas_data(&mut self.xs) {
-                    let image = zoom_image(self.canvas_zoom, w, h, &buf);
+                    let image = egui::ColorImage::from_rgba_unmultiplied([w, h], &buf);
                     if let Some(tex) = self.canvas.as_mut() {
                         tex.set(image);
                     } else {
@@ -503,30 +507,6 @@ fn get_canvas_data(xs: &mut Xstate) -> Xresult1<(usize, usize, Vec<u8>)> {
     }
 }
 
-fn zoom_image(zoom: usize, w: usize, h: usize, data: &[u8]) -> ColorImage {
-    if zoom == 1 {
-        return egui::ColorImage::from_rgba_unmultiplied([w, h], data);
-    }
-    let wx = w * zoom;
-    let hx = h * zoom;
-    let mut buf: Vec<u8> = Vec::new();
-    for y in 0..h {
-        for _ in 0..zoom {
-            for x in 0..w {
-                for _ in 0..zoom {
-                    let idx = (y * w + x) * 4;
-                    buf.push(data[idx]);
-                    buf.push(data[idx + 1]);
-                    buf.push(data[idx + 2]);
-                    buf.push(data[idx + 3]);
-                }
-            }
-        }
-    }
-    assert_eq!(wx * wx * 4, buf.len());
-    return egui::ColorImage::from_rgba_unmultiplied([wx, hx], &buf);
-}
-
 impl epi::App for TemplateApp {
     fn name(&self) -> &str {
         "eframe template"
@@ -555,6 +535,6 @@ impl epi::App for TemplateApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, _frame: &epi::Frame) {
-        self.editor(ctx);
+        self.canvas(ctx);
     }
 }
