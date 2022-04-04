@@ -88,94 +88,19 @@ impl TemplateApp {
             self.backup = Some((self.xs.clone(), self.frozen_code.to_owned()));
         }
     }
-}
 
-use std::future::{Future};
-use std::task::{Poll, Context, Wake};
-use std::pin::Pin;
-use std::sync::Arc;
-
-struct MyWaker();
-
-impl Wake for MyWaker {
-    fn wake(self: Arc<Self>) {
-    }
-}
-
-fn get_canvas_data(xs: &mut Xstate) -> Xresult1<(usize, usize, Vec<u8>)> {
-    let (w, h) = xeh::d2_plugin::size(xs)?;
-    if w > 0 && h  > 0 {
-        let mut buf = Vec::new();
-        xeh::d2_plugin::copy_rgba_data(xs, &mut buf)?;
-        Ok((w, h, buf))
-    } else {
-        Err(Xerr::NotFound)
-    }
-}
-
-fn zoom_image(zoom: usize, w: usize, h: usize, data: &[u8]) -> ColorImage {
-    if zoom == 1 {
-        return egui::ColorImage::from_rgba_unmultiplied([w, h], data);
-    }
-    let wx = w * zoom;
-    let hx = h * zoom;
-    let mut buf: Vec<u8> = Vec::new();
-    for y in 0..h {
-        for _ in 0..zoom {
-            for x in 0..w {
-                for _ in 0..zoom {
-                    let idx = (y * w + x) * 4;
-                    buf.push(data[idx]);
-                    buf.push(data[idx + 1]);
-                    buf.push(data[idx + 2]);
-                    buf.push(data[idx + 3]);
-                }
-            }
-        }
-    }
-    assert_eq!(wx * wx * 4, buf.len());
-    return egui::ColorImage::from_rgba_unmultiplied([wx, hx], &buf);
-}
-
-impl epi::App for TemplateApp {
-    fn name(&self) -> &str {
-        "eframe template"
-    }
-
-    /// Called once before the first frame.
-    fn setup(
-        &mut self,
-        _ctx: &egui::Context,
-        _frame: &epi::Frame,
-        _storage: Option<&dyn epi::Storage>,
-    ) {
-        #[cfg(feature = "persistence")]
-        if let Some(storage) = _storage {
-            *self = epi::get_value(storage, epi::APP_KEY).unwrap_or_default()
-        }
-    }
-
-    /// Called by the frame work to save state before shutdown.
-    /// Note that you must enable the `persistence` feature for this to work.
-    #[cfg(feature = "persistence")]
-    fn save(&mut self, storage: &mut dyn epi::Storage) {
-        epi::set_value(storage, epi::APP_KEY, self);
-    }
-
-    /// Called each time the UI needs repainting, which may be many times per second.
-    /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
-    fn update(&mut self, ctx: &egui::Context, _frame: &epi::Frame) {
+    fn editor(&mut self, ctx: &egui::Context) {
         let mut snapshot_clicked = false;
         let mut rollback_clicked = false;
+        let mut eval_clicked = false;
         let mut run_clicked = false;
         let mut debug_clicked = false;
         let mut zoom_changed = false;
         let mut next_clicked = false;
         let mut rnext_clicked = false;
         self.win_size = ctx.used_size();
-
+        
         let font = FontId::monospace(14.0);
-
         // update style
         let mut vis = Visuals::default();
         vis.override_text_color = Some(Color32::from_rgb(0xE6, 0x9F, 0x00));
@@ -216,10 +141,6 @@ impl epi::App for TemplateApp {
                         let s = Xbitstr::from(data.as_ref().to_owned());
                         self.binary_dropped(s);
                     }
-                }
-
-                if ui.input().modifiers.ctrl && ui.input().key_down(egui::Key::Enter)  {
-                    run_clicked = true;
                 }
 
                 snapshot_clicked = ui.button("Snapshot").clicked();
@@ -378,13 +299,24 @@ impl epi::App for TemplateApp {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
+            ui.with_layer_id(LayerId::background(), |ui| {
+                if let Some(texture) = self.canvas.as_ref() {
+                    let size = texture.size_vec2();
+                    let img = egui::Image::new(texture, size);
+                    let rect = Rect {
+                        min: pos2(0.0, 0.0),
+                        max: pos2(size.x, size.y)
+                    };
+                    img.paint_at(ui, rect);
+                }
+            });
+
             ui.spacing_mut().item_spacing.y = 2.0;
             let mut repl_has_focus = false;
-            let mut repl_eval_clicked = false;
 
             ui.horizontal(|ui| {
                 if ui.button("Run").clicked() {
-                    run_clicked = true;
+                    eval_clicked = true;
                 }
                 if ui.button("Debug").clicked() {
                     debug_clicked = true;
@@ -401,7 +333,11 @@ impl epi::App for TemplateApp {
                     .desired_rows(25)
                     .code_editor()
                     .id(Id::new("code"));
-                ui.add(user_edit);
+            let resp = ui.add(user_edit);
+            if resp.has_focus() && ui.input().modifiers.ctrl
+                && ui.input().key_down(egui::Key::Enter) {
+                    run_clicked = true;
+            }
 
             egui::containers::ScrollArea::vertical()
                      .stick_to_bottom().show(ui, |ui| {
@@ -441,14 +377,18 @@ impl epi::App for TemplateApp {
                     .code_editor()
                     .id(Id::new("repl"));
                 ui.horizontal(|ui| {
+                    if ui.button("Evaluate").clicked() {
+                        eval_clicked = true;
+                    }
                     let res = ui.add(code);
                     if self.setup_focus {
                         res.request_focus();
                         self.setup_focus = false;
                     }
                     repl_has_focus = res.has_focus();
-                    if ui.button("Evaluate").clicked() {
-                        repl_eval_clicked = true;
+                    if repl_has_focus && ui.input().modifiers.ctrl 
+                    && ui.input().key_down(egui::Key::Enter)  {
+                        eval_clicked = true;
                     }
                 });
             });
@@ -488,10 +428,12 @@ impl epi::App for TemplateApp {
                     self.debug_token = self.xs.current_location();
                     self.highlight_line = None;
                 }
-            } else if (run_clicked || debug_clicked) && !self.repl_code.trim_end().is_empty() {
+            } else if run_clicked && !self.user_code.trim_end().is_empty() {
+                self.xs.eval(&self.user_code);
+            } else if eval_clicked && !self.repl_code.trim_end().is_empty() {
                 let t = Instant::now();
                 let xsrc = Xstr::from(self.repl_code.trim_end());
-                let res = if run_clicked {
+                let res = if eval_clicked {
                     self.xs.evalxstr(xsrc.clone())
                 } else {
                     self.xs.compile_xstr(xsrc.clone())
@@ -512,7 +454,7 @@ impl epi::App for TemplateApp {
                 self.repl_code.clear();
             }
 
-            if next_clicked || rnext_clicked || run_clicked || rollback_clicked || zoom_changed {
+            if next_clicked || rnext_clicked || eval_clicked || rollback_clicked || zoom_changed {
                 if let Ok((w, h, buf)) = get_canvas_data(&mut self.xs) {
                     let image = zoom_image(self.canvas_zoom, w, h, &buf);
                     if let Some(tex) = self.canvas.as_mut() {
@@ -535,5 +477,84 @@ impl epi::App for TemplateApp {
                 ui.label("Click \"Run\" or Ctrl+Return to evaluate expression in the code window");
             });
         }
+    }
+}
+
+use std::future::{Future};
+use std::task::{Poll, Context, Wake};
+use std::pin::Pin;
+use std::sync::Arc;
+
+struct MyWaker();
+
+impl Wake for MyWaker {
+    fn wake(self: Arc<Self>) {
+    }
+}
+
+fn get_canvas_data(xs: &mut Xstate) -> Xresult1<(usize, usize, Vec<u8>)> {
+    let (w, h) = xeh::d2_plugin::size(xs)?;
+    if w > 0 && h  > 0 {
+        let mut buf = Vec::new();
+        xeh::d2_plugin::copy_rgba_data(xs, &mut buf)?;
+        Ok((w, h, buf))
+    } else {
+        Err(Xerr::NotFound)
+    }
+}
+
+fn zoom_image(zoom: usize, w: usize, h: usize, data: &[u8]) -> ColorImage {
+    if zoom == 1 {
+        return egui::ColorImage::from_rgba_unmultiplied([w, h], data);
+    }
+    let wx = w * zoom;
+    let hx = h * zoom;
+    let mut buf: Vec<u8> = Vec::new();
+    for y in 0..h {
+        for _ in 0..zoom {
+            for x in 0..w {
+                for _ in 0..zoom {
+                    let idx = (y * w + x) * 4;
+                    buf.push(data[idx]);
+                    buf.push(data[idx + 1]);
+                    buf.push(data[idx + 2]);
+                    buf.push(data[idx + 3]);
+                }
+            }
+        }
+    }
+    assert_eq!(wx * wx * 4, buf.len());
+    return egui::ColorImage::from_rgba_unmultiplied([wx, hx], &buf);
+}
+
+impl epi::App for TemplateApp {
+    fn name(&self) -> &str {
+        "eframe template"
+    }
+
+    /// Called once before the first frame.
+    fn setup(
+        &mut self,
+        _ctx: &egui::Context,
+        _frame: &epi::Frame,
+        _storage: Option<&dyn epi::Storage>,
+    ) {
+        #[cfg(feature = "persistence")]
+        if let Some(storage) = _storage {
+            *self = epi::get_value(storage, epi::APP_KEY).unwrap_or_default()
+        }
+    }
+
+    /// Called by the frame work to save state before shutdown.
+    /// Note that you must enable the `persistence` feature for this to work.
+    #[cfg(feature = "persistence")]
+    fn save(&mut self, storage: &mut dyn epi::Storage) {
+        epi::set_value(storage, epi::APP_KEY, self);
+    }
+
+    /// Called each time the UI needs repainting, which may be many times per second.
+    /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
+    fn update(&mut self, ctx: &egui::Context, _frame: &epi::Frame) {
+        self.editor(ctx);
     }
 }
