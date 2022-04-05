@@ -18,7 +18,6 @@ pub struct TemplateApp {
     view_start: isize,
     num_rows: isize,
     num_cols: isize,
-    user_code: String,
     repl_code: String,
     win_size: Vec2,
     frozen_code: Vec<FrozenStr>,
@@ -33,7 +32,6 @@ pub struct TemplateApp {
     canvas_interaction: bool,
     setup_focus: bool,
     bytecode_open: bool,
-    help_open: bool,
 }
 
 #[derive(Clone)]
@@ -53,7 +51,6 @@ impl Default for TemplateApp {
             num_rows: 10,
             num_cols: 8,
             win_size: Vec2::new(640.0, 480.0),
-            user_code: String::new(),
             repl_code: String::new(),
             frozen_code: Vec::new(),
             highlight_line: None,
@@ -67,7 +64,6 @@ impl Default for TemplateApp {
             setup_focus: true,
             rdebug_enabled: false,
             bytecode_open: true,
-            help_open: false,
         }
     }
 }
@@ -128,20 +124,13 @@ impl TemplateApp {
         let mut snapshot_clicked = false;
         let mut rollback_clicked = false;
         let mut eval_clicked = false;
-        let mut run_clicked = false;
         let mut debug_clicked = false;
         let mut next_clicked = false;
         let mut rnext_clicked = false;
         self.win_size = ctx.used_size();
         
         let font = FontId::monospace(14.0);
-        // update style
-        let mut style = (*ctx.style()).clone();
-        style.visuals.override_text_color = Some(Color32::from_rgb(0xE6, 0x9F, 0x00));
-        style.override_font_id = Some(font.clone());
-        style.visuals.widgets.noninteractive.bg_fill = Color32::TRANSPARENT;
-        //style.visuals.widgets.noninteractive.fg_stroke.color = Color32::from_rgb(0xE6, 0x9F, 0x00);
-        ctx.set_style(style);
+        crate::style::tune(ctx, &font);
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -203,9 +192,6 @@ impl TemplateApp {
                     } else {
                         self.xs.stop_recording();
                     }
-                }
-                if ui.button("Help").clicked() {
-                    self.help_open = true;
                 }
             });
         });
@@ -329,16 +315,6 @@ impl TemplateApp {
                     rnext_clicked = true;
                 }
             });
-            let user_edit = egui::TextEdit::multiline(&mut self.user_code)
-                    .desired_width(f32::INFINITY)
-                    .desired_rows(25)
-                    .code_editor()
-                    .id(Id::new("code"));
-            let resp = ui.add(user_edit);
-            if resp.has_focus() && ui.input().modifiers.ctrl
-                && ui.input().key_down(egui::Key::Enter) {
-                    run_clicked = true;
-            }
 
             egui::containers::ScrollArea::vertical()
                      .stick_to_bottom().show(ui, |ui| {
@@ -373,39 +349,26 @@ impl TemplateApp {
                 }
 
                 let code = egui::TextEdit::multiline(&mut self.repl_code)
-                    .desired_rows(1)
+                    .desired_rows(5)
                     .desired_width(f32::INFINITY)
                     .code_editor()
                     .id(Id::new("repl"));
-                ui.horizontal(|ui| {
-                    if ui.button("Evaluate").clicked() {
-                        eval_clicked = true;
-                    }
-                    let res = ui.add(code);
-                    if self.setup_focus {
-                        res.request_focus();
-                        self.setup_focus = false;
-                    }
-                    repl_has_focus = res.has_focus();
-                    if repl_has_focus && ui.input().modifiers.ctrl 
-                    && ui.input().key_down(egui::Key::Enter)  {
-                        eval_clicked = true;
-                    }
-                });
+                let res = ui.add(code);
+                if self.setup_focus {
+                    res.request_focus();
+                    self.setup_focus = false;
+                }
+                repl_has_focus = res.has_focus();
+                if repl_has_focus && ui.input().modifiers.ctrl 
+                && ui.input().key_down(egui::Key::Enter)  {
+                    eval_clicked = true;
+                }
             });
             
             if !repl_has_focus {
-                if ctx.input().key_pressed(egui::Key::ArrowUp) {
-                    self.move_view(-1);
-                }
-                if ctx.input().key_pressed(egui::Key::PageUp) {
-                    self.move_view(-self.num_rows);
-                }
-                if ctx.input().key_pressed(egui::Key::ArrowDown) {
-                    self.move_view(1);
-                }
-                if ctx.input().key_pressed(egui::Key::PageDown) {
-                    self.move_view(self.num_rows);
+                let n = hotkeys::scroll_view(ctx, self.num_cols);
+                if n != 0 {
+                    self.move_view(n);
                 }
             }
 
@@ -429,8 +392,6 @@ impl TemplateApp {
                     self.debug_token = self.xs.current_location();
                     self.highlight_line = None;
                 }
-            } else if run_clicked && !self.user_code.trim_end().is_empty() {
-                self.xs.eval(&self.user_code);
             } else if eval_clicked && !self.repl_code.trim_end().is_empty() {
                 let t = Instant::now();
                 let xsrc = Xstr::from(self.repl_code.trim_end());
@@ -468,16 +429,6 @@ impl TemplateApp {
             }
         });
 
-        if self.help_open {
-            Window::new("Help")
-            .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
-            .open(&mut self.help_open)
-            .resizable(true)
-            .show(ctx, |ui| {
-                ui.label("Drag and Drop file or click \"Open Binary...\" to start exploring");
-                ui.label("Click \"Run\" or Ctrl+Return to evaluate expression in the code window");
-            });
-        }
     }
 }
 
