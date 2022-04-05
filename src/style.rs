@@ -1,24 +1,53 @@
-use eframe::egui::*;
+use eframe::{egui::*, egui::style::*};
 
-fn set_no_rounding(r: &mut Rounding)
-{
-    r.ne = 0.0;
-    r.nw = 0.0;
-    r.se = 0.0;
-    r.sw = 0.0;
+pub const WINDOW_BG_FILL: Color32 = Color32::from_rgb(0x10, 0x10, 0x10);
+pub const TEXT_FG: Color32 = Color32::from_rgb(0xE6, 0x9F, 0x00);
+pub const HEX_FG1: Color32 = Color32::from_rgb(0x15, 0xac, 0x0);
+pub const HEX_FG2: Color32 = Color32::from_rgb(0x15, 0x5c, 0x0);
+pub const LOG_FG: Color32 = Color32::from_rgb(0x5a, 0x5a, 0x5a);
+
+pub fn code(text: String, is_error: bool) -> RichText {
+    let r = RichText::new(text).monospace();
+    if is_error {
+        r.background_color(Color32::RED)
+    } else {
+        r
+    }
+}
+
+pub fn log(text: String) -> RichText {
+    RichText::new(text).monospace().color(LOG_FG)
+}
+
+pub fn hex_addr_rich(text: String) -> RichText {
+    RichText::new(text).monospace().color(HEX_FG2)
+}
+
+pub fn hex_data_rich(text: String, consumed: bool) -> RichText {
+    let r = RichText::new(text).monospace().color(HEX_FG1);
+    if consumed {
+        r.background_color(Color32::DARK_GRAY)
+    } else {
+        r
+    }
 }
 
 pub fn tune(ctx: &Context, font: &FontId) {
-    // update style
     let mut style = (*ctx.style()).clone();
     style.override_font_id = Some(font.clone());
-    style.visuals.override_text_color = Some(Color32::from_rgb(0xE6, 0x9F, 0x00));
-    style.visuals.widgets.noninteractive.bg_fill = Color32::from_rgba_premultiplied(0, 0, 0, 90);
-    //style.visuals.code_bg_color = Color32::TRANSPARENT;
-    //style.visuals.widgets.active.bg_fill = Color32::TRANSPARENT;
-    style.visuals.extreme_bg_color = Color32::from_rgba_premultiplied(0, 0, 0, 50);
-    set_no_rounding(&mut style.visuals.widgets.inactive.rounding);
-    set_no_rounding(&mut style.visuals.widgets.noninteractive.rounding);
-    //style.visuals.widgets.noninteractive.fg_stroke.color = Color32::from_rgb(0xE6, 0x9F, 0x00);
+    style.visuals = Visuals::light();
+    //style.override_text_style = Some(TextStyle::Monospace);
+    style.visuals.override_text_color = Some(TEXT_FG);
+    style.visuals.widgets.noninteractive.bg_fill = WINDOW_BG_FILL;
+    //style.visuals.widgets.noninteractive.bg_stroke.width = 1.0;
+    // style.visuals.widgets.active.fg_stroke.color = Color32::RED;
+    // style.visuals.widgets.inactive.fg_stroke.color = Color32::RED;
+    // style.visuals.widgets.hovered.fg_stroke.color = Color32::RED;
+
+    style.visuals.button_frame = false;
+    
+    style.visuals.extreme_bg_color = Color32::from_rgba_unmultiplied(0x77, 0x77, 0x77, 30);
+    style.visuals.widgets.inactive.rounding = Rounding::same(0.0);
+    style.visuals.widgets.noninteractive.rounding = Rounding::same(0.0);
     ctx.set_style(style);
 }

@@ -18,8 +18,8 @@ pub struct TemplateApp {
     view_start: isize,
     num_rows: isize,
     num_cols: isize,
+    font: FontId,
     repl_code: String,
-    win_size: Vec2,
     frozen_code: Vec<FrozenStr>,
     highlight_line: Option<ErrorContext>,
     debug_token: Option<TokenLocation>,
@@ -50,7 +50,6 @@ impl Default for TemplateApp {
             view_start: 0,
             num_rows: 10,
             num_cols: 8,
-            win_size: Vec2::new(640.0, 480.0),
             repl_code: String::new(),
             frozen_code: Vec::new(),
             highlight_line: None,
@@ -64,6 +63,7 @@ impl Default for TemplateApp {
             setup_focus: true,
             rdebug_enabled: false,
             bytecode_open: true,
+            font: FontId::monospace(14.0),
         }
     }
 }
@@ -127,10 +127,6 @@ impl TemplateApp {
         let mut debug_clicked = false;
         let mut next_clicked = false;
         let mut rnext_clicked = false;
-        self.win_size = ctx.used_size();
-        
-        let font = FontId::monospace(14.0);
-        crate::style::tune(ctx, &font);
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -164,7 +160,22 @@ impl TemplateApp {
                         self.binary_dropped(s);
                     }
                 }
-
+                
+                ui.horizontal(|ui| {
+                    if ui.button("Run").clicked() {
+                        eval_clicked = true;
+                    }
+                    if ui.button("Debug").clicked() {
+                        debug_clicked = true;
+                    }
+                    if ui.button("Next").clicked() {
+                        next_clicked = true;
+                    }
+                    if self.rdebug_enabled && ui.button("Back").clicked() {
+                        rnext_clicked = true;
+                    }
+                });
+    
                 snapshot_clicked = ui.button("Snapshot").clicked();
                 if ui.input().modifiers.ctrl && ui.input().key_down(egui::Key::G) {
                     snapshot_clicked = true;
@@ -196,34 +207,33 @@ impl TemplateApp {
             });
         });
 
-        egui::Window::new("Bytecode")
-        .id(Id::new("bytecode-window"))
-        .anchor(Align2::RIGHT_BOTTOM, [0.0, 0.0])
-        .open(&mut self.bytecode_open)
-        .vscroll(true)
-        .show(ctx, |ui| {
-            ui.label(format!("ip={}", self.xs.ip()));
-            ui.vertical(|ui| {
-                for (ip, op) in self.xs.bytecode().iter().enumerate() {
-                    let optext = self.xs.fmt_opcode(ip, op);    
-                    let mut rich = RichText::new(format!("{:05x}: {}", ip, optext));
-                    if ip == self.xs.ip() {
-                        rich = rich.background_color(Color32::LIGHT_GRAY);
-                    }
-                    ui.add(Label::new(rich));
-                }
-            });
-        });
+        // egui::Window::new("Bytecode")
+        // .open(&mut self.bytecode_open)
+        // .vscroll(true)
+        // .show(ctx, |ui| {
+        //     //ctx.style_ui(ui);
+        //     ui.label(format!("ip={}", self.xs.ip()));
+        //     ui.vertical(|ui| {
+        //         for (ip, op) in self.xs.bytecode().iter().enumerate() {
+        //             let optext = self.xs.fmt_opcode(ip, op);    
+        //             let mut rich = RichText::new(format!("{:05x}: {}", ip, optext));
+        //             if ip == self.xs.ip() {
+        //                 rich = rich.background_color(Color32::LIGHT_GRAY);
+        //             }
+        //             ui.add(Label::new(rich));
+        //         }
+        //     });
+        // });
 
         egui::SidePanel::left("left_panel").show(ctx, |ui| {
             let total_cols = self.num_cols * 3 + 2;
             let total_rows = self.num_rows;
-            let glyph_width = ui.fonts().glyph_width(&font, '0');
-            let row_height = ui.fonts().row_height(&font);
+            let glyph_width = ui.fonts().glyph_width(&self.font, '0');
+            let row_height = ui.fonts().row_height(&self.font);
             let size1 = Vec2::new(total_cols as f32 * glyph_width,
                 total_rows as f32 * row_height);
             ui.set_min_width(size1.x);
-            
+
             let xgrid = ui.vertical(|ui|{
                 let bs = self.current_bstr();
                 let mut from = (self.view_start as usize) * 8;
@@ -231,37 +241,48 @@ impl TemplateApp {
                 let visible_bits = self.num_rows * self.num_cols * 8;
                 let to = bs.end().min(from + visible_bits as usize);
                 let start = bs.start();
-                let header = format!("consumed {},{} of {},{} bytes", start / 8, start % 8,
-                    bs.end() / 8, bs.end() % 8);
-                ui.monospace(header);
+                if bs.len() > 0 {
+                    let header = crate::style::hex_addr_rich(format!("{:06x},{}", start / 8, start % 8));
+                    ui.add(Label::new(header));
+                }
+                        
                 ui.set_min_height(size1.y * 1.5);
 
                 while from < to {
+                    let spacing = ui.spacing_mut().clone();
+                    ui.spacing_mut().item_spacing.x = 0.0;
+                    ui.spacing_mut().item_spacing.y = 0.0;
                     ui.horizontal(|ui| {
-                        let addr_text = RichText::new(format!("{:06x}", from / 8)).monospace();
-                        ui.add(egui::Label::new(addr_text));
-                        ui.separator();
-                        let xspacing = ui.spacing_mut().item_spacing;
-                        ui.spacing_mut().item_spacing *= 0.5;
+                        let addr_text = crate::style::hex_addr_rich(format!("{:06x} ", from / 8));
+                        ui.add(Label::new(addr_text));
                         let mut ascii = String::new();
-                        ascii.push_str(" ");
-                        for _ in 0..self.num_cols {
+                        ascii.push_str("  ");
+                        for i in 0..self.num_cols {
                             if let Some((val, n)) = it.next() { 
-                                let mut text = RichText::new(&format!("{:02x}", val)).monospace();
-                                if from < start {
-                                    text = text.color(Color32::DARK_GRAY);
-                                }
-                                ui.add(Label::new(text));
-                                let c= char::from_u32(val as u32).unwrap();
-                                ascii.push(if c.is_ascii_graphic() { c } else { '.' });
+                                let hex_data = crate::style::hex_data_rich(format!(" {:02x}", val), from < start);
+                                ui.add(Label::new(hex_data));
+                                let c= xeh::bitstring_mod::byte_to_dump_char(val);
+                                ascii.push(c);
                                 from += n as usize;
                             } else {
+                                let n = (self.num_cols - i) as usize;
+                                let mut s = String::with_capacity(n * 3);
+                                for _ in 0..n {
+                                    s.push_str("   ");
+                                    ascii.push(' ');
+                                }
+                                let spaces = crate::style::hex_data_rich(s, false);
+                                ui.add(Label::new(spaces));
                                 break;
                             }
                         }
-                        ui.add(Label::new(ascii));
-                        ui.spacing_mut().item_spacing = xspacing;
+                        ui.add(Label::new(crate::style::hex_addr_rich(ascii)));
                     });
+                    *ui.spacing_mut() = spacing;
+                }
+                if bs.len() > 0 {
+                    let footer = crate::style::hex_addr_rich(format!("{:06x},{}", bs.end() / 8, bs.end() % 8));
+                    ui.add(Label::new(footer));
                 }
             });
 
@@ -270,7 +291,7 @@ impl TemplateApp {
             self.move_view(v.y as isize);
 
             ui.separator();
-            ui.label(format!("Data Stack: {} items", self.xs.data_depth()));
+            ui.label("Data Stack:");
 
             egui::containers::ScrollArea::vertical().show(ui, |ui| {
                 ui.set_min_width(size1.x);
@@ -301,47 +322,27 @@ impl TemplateApp {
             ui.spacing_mut().item_spacing.y = 2.0;
             let mut repl_has_focus = false;
 
-            ui.horizontal(|ui| {
-                if ui.button("Run").clicked() {
-                    eval_clicked = true;
-                }
-                if ui.button("Debug").clicked() {
-                    debug_clicked = true;
-                }
-                if ui.button("Next").clicked() {
-                    next_clicked = true;
-                }
-                if self.rdebug_enabled && ui.button("Back").clicked() {
-                    rnext_clicked = true;
-                }
-            });
-
             egui::containers::ScrollArea::vertical()
                      .stick_to_bottom().show(ui, |ui| {
                 for x in self.frozen_code.iter() {
                     match x {
                         FrozenStr::Log(s) => {
-                            let rich = RichText::new(s.to_string())
-                                .monospace().color(Color32::GRAY);
+                            let rich = crate::style::log(s.to_string());
                             ui.add(Label::new(rich));
                         }
                         FrozenStr::Code(s) => {
-                            let mut rich = RichText::new(s.to_string())
-                                .monospace()
-                                .color(Color32::WHITE);
+                            let mut is_error = false;
                             if let Some(errctx) = self.highlight_line.as_ref() {
                                 if Xsubstr::shallow_eq(&errctx.location.whole_line, s) {
-                                    rich = rich.background_color(Color32::RED);
+                                    is_error = true;
                                 }
                             }
-                            ui.add(Label::new(rich));
+                            ui.add(Label::new(crate::style::code(s.to_string(), is_error)));
                             if let Some(dbg) = self.debug_token.as_ref() {
                                 if Xsubstr::shallow_eq(&dbg.whole_line, s) {
                                     let text = format!("{:->1$}", '^', dbg.col + 1);
-                                    let rich2 = RichText::new(text)
-                                        .monospace()
-                                        .color(Color32::WHITE);
-                                    ui.add(Label::new(rich2));
+                                    let rich= crate::style::code(text, false);
+                                    ui.add(Label::new(rich));
                                 }
                             }
                         }
@@ -465,7 +466,7 @@ impl epi::App for TemplateApp {
     /// Called once before the first frame.
     fn setup(
         &mut self,
-        _ctx: &egui::Context,
+        ctx: &egui::Context,
         _frame: &epi::Frame,
         _storage: Option<&dyn epi::Storage>,
     ) {
@@ -473,6 +474,7 @@ impl epi::App for TemplateApp {
         if let Some(storage) = _storage {
             *self = epi::get_value(storage, epi::APP_KEY).unwrap_or_default()
         }
+        crate::style::tune(ctx, &self.font);
     }
 
     /// Called by the frame work to save state before shutdown.
