@@ -1,24 +1,21 @@
 use eframe::{egui::*};
 
-pub const WINDOW_BG_FILL: Color32 = Color32::from_rgb(0x10, 0x10, 0x10);
-pub const TEXT_FG: Color32 = Color32::from_rgb(0xaa, 0xaa, 0xaa);// Color32::from_rgb(0xE6, 0x9F, 0x00);
-pub const HEX_FG1: Color32 = Color32::from_rgb(0x15, 0xac, 0x0);
-pub const HEX_FG2: Color32 = Color32::from_rgb(0x15, 0x5c, 0x0);
-pub const LOG_FG: Color32 = Color32::from_rgb(0x5a, 0x5a, 0x5a);
-pub const CODE_FG: Color32 = Color32::from_rgb(0xee, 0xee, 0xee);
-pub const CODE_ERR_BG: Color32 = Color32::from_rgb(0x80, 0x0, 0x0);
-pub const CODE_DBG_BG: Color32 = Color32::from_rgb(0x80, 0x33, 0x33);
-
-pub fn log(text: String) -> RichText {
-    RichText::new(text).monospace().color(LOG_FG)
-}
+pub const TEXT_BG: Color32 = Color32::from_rgb(0xF2, 0xEE, 0xDE);
+pub const TEXT_FG: Color32 = Color32::from_rgb(0x00, 0x00, 0x00);
+pub const TEXT_HIGLIGHT: Color32 = Color32::from_rgb(0xD8, 0xD5, 0xC7);
+pub const COMMENT_FG: Color32 = Color32::from_rgb(0xAA, 0xAA, 0xAA);
+pub const HEX_DATA_FG: Color32 = TEXT_FG;
+pub const HEX_ADDR_FG: Color32 = COMMENT_FG;
+pub const CODE_FG: Color32 = TEXT_FG;
+pub const CODE_ERR_BG: Color32 = Color32::from_rgb(0xCC, 0x3E, 0x28);
+pub const CODE_DBG_BG: Color32 = Color32::from_rgb(0x15, 0x8c, 0x86);
 
 pub fn hex_addr_rich(text: String) -> RichText {
-    RichText::new(text).monospace().color(HEX_FG2)
+    RichText::new(text).monospace().color(HEX_ADDR_FG)
 }
 
 pub fn hex_data_rich(text: String, consumed: bool) -> RichText {
-    let r = RichText::new(text).monospace().color(HEX_FG1);
+    let r = RichText::new(text).monospace().color(HEX_DATA_FG);
     if consumed {
         r.background_color(Color32::DARK_GRAY)
     } else {
@@ -32,7 +29,7 @@ pub fn tune(ctx: &Context, font: &FontId) {
     style.visuals = Visuals::light();
     //style.override_text_style = Some(TextStyle::Monospace);
     style.visuals.override_text_color = Some(TEXT_FG);
-    style.visuals.widgets.noninteractive.bg_fill = WINDOW_BG_FILL;
+    style.visuals.widgets.noninteractive.bg_fill = TEXT_BG;
     //style.visuals.widgets.noninteractive.bg_stroke.width = 1.0;
     // style.visuals.widgets.active.fg_stroke.color = Color32::RED;
     // style.visuals.widgets.inactive.fg_stroke.color = Color32::RED;

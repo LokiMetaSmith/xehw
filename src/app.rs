@@ -206,23 +206,24 @@ impl TemplateApp {
             });
         });
 
-        // egui::Window::new("Bytecode")
-        // .open(&mut self.bytecode_open)
-        // .vscroll(true)
-        // .show(ctx, |ui| {
-        //     //ctx.style_ui(ui);
-        //     ui.label(format!("ip={}", self.xs.ip()));
-        //     ui.vertical(|ui| {
-        //         for (ip, op) in self.xs.bytecode().iter().enumerate() {
-        //             let optext = self.xs.fmt_opcode(ip, op);    
-        //             let mut rich = RichText::new(format!("{:05x}: {}", ip, optext));
-        //             if ip == self.xs.ip() {
-        //                 rich = rich.background_color(Color32::LIGHT_GRAY);
-        //             }
-        //             ui.add(Label::new(rich));
-        //         }
-        //     });
-        // });
+        egui::Window::new("Bytecode")
+        .open(&mut self.bytecode_open)
+        .default_pos(pos2(200.0, 400.0))
+        .vscroll(true)
+        .show(ctx, |ui| {
+            //ctx.style_ui(ui);
+            ui.label(format!("ip={}", self.xs.ip()));
+            ui.vertical(|ui| {
+                for (ip, op) in self.xs.bytecode().iter().enumerate() {
+                    let optext = self.xs.fmt_opcode(ip, op);    
+                    let mut rich = RichText::new(format!("{:05x}: {}", ip, optext)).monospace().color(TEXT_FG);
+                    if ip == self.xs.ip() {
+                        rich = rich.background_color(TEXT_HIGLIGHT);
+                    }
+                    ui.label(rich);
+                }
+            });
+        });
 
         egui::SidePanel::left("left_panel").show(ctx, |ui| {
             let total_cols = self.num_cols * 3 + 2;
@@ -328,8 +329,7 @@ impl TemplateApp {
                 for x in self.frozen_code.iter() {
                     match x {
                         FrozenStr::Log(s) => {
-                            let rich = crate::style::log(s.to_string());
-                            ui.add(Label::new(rich));
+                            ui.label(RichText::new(s.to_string()).monospace().color(COMMENT_FG));
                         }
                         FrozenStr::Code(s) => {
                             if let Some(e) = self.xs.last_error() {
@@ -411,9 +411,7 @@ impl TemplateApp {
                 } else {
                     self.xs.compile_xstr(xsrc.clone())
                 };
-                if res.is_ok() && debug_clicked {
-                    self.debug_token = self.xs.current_location();
-                }
+                self.debug_token = self.xs.current_location();
                 for s in xeh::lex::XstrLines::new(xsrc) {
                     self.frozen_code.push(FrozenStr::Code(s))
                 }
