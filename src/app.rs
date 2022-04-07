@@ -2,7 +2,8 @@ use eframe::{egui, epi};
 use eframe::egui::*;
 
 use xeh::prelude::*;
-use xeh::state::{ErrorContext, TokenLocation};
+use xeh::state::{TokenLocation};
+use crate::style::*;
 
 #[cfg(target_arch = "wasm32")]
 type Instant = instant::Instant;
@@ -19,9 +20,8 @@ pub struct TemplateApp {
     num_rows: isize,
     num_cols: isize,
     font: FontId,
-    repl_code: String,
+    live_code: String,
     frozen_code: Vec<FrozenStr>,
-    highlight_line: Option<ErrorContext>,
     debug_token: Option<TokenLocation>,
     rdebug_enabled: bool,
     backup: Option<(Xstate, Vec<FrozenStr>)>,
@@ -50,9 +50,8 @@ impl Default for TemplateApp {
             view_start: 0,
             num_rows: 10,
             num_cols: 8,
-            repl_code: String::new(),
+            live_code: String::new(),
             frozen_code: Vec::new(),
-            highlight_line: None,
             debug_token: None,
             canvas: None,
             canvas_interaction: false,
@@ -123,7 +122,7 @@ impl TemplateApp {
     fn editor(&mut self, ctx: &egui::Context) {
         let mut snapshot_clicked = false;
         let mut rollback_clicked = false;
-        let mut eval_clicked = false;
+        let mut run_clicked = false;
         let mut debug_clicked = false;
         let mut next_clicked = false;
         let mut rnext_clicked = false;
@@ -163,7 +162,7 @@ impl TemplateApp {
                 
                 ui.horizontal(|ui| {
                     if ui.button("Run").clicked() {
-                        eval_clicked = true;
+                        run_clicked = true;
                     }
                     if ui.button("Debug").clicked() {
                         debug_clicked = true;
@@ -242,7 +241,8 @@ impl TemplateApp {
                 let to = bs.end().min(from + visible_bits as usize);
                 let start = bs.start();
                 if bs.len() > 0 {
-                    let header = crate::style::hex_addr_rich(format!("{:06x},{}", start / 8, start % 8));
+                    let header = hex_addr_rich(
+                        format!("{:06x},{}", start / 8, start % 8));
                     ui.add(Label::new(header));
                 }
                         
@@ -253,14 +253,15 @@ impl TemplateApp {
                     ui.spacing_mut().item_spacing.x = 0.0;
                     ui.spacing_mut().item_spacing.y = 0.0;
                     ui.horizontal(|ui| {
-                        let addr_text = crate::style::hex_addr_rich(format!("{:06x} ", from / 8));
+                        let addr_text = hex_addr_rich(format!("{:06x} ", from / 8));
                         ui.add(Label::new(addr_text));
                         let mut ascii = String::new();
                         ascii.push_str("  ");
                         for i in 0..self.num_cols {
                             if let Some((val, n)) = it.next() { 
-                                let hex_data = crate::style::hex_data_rich(format!(" {:02x}", val), from < start);
-                                ui.add(Label::new(hex_data));
+                                let hex_data = hex_data_rich(
+                                    format!(" {:02x}", val), from < start);
+                                ui.label(hex_data);
                                 let c= xeh::bitstring_mod::byte_to_dump_char(val);
                                 ascii.push(c);
                                 from += n as usize;
@@ -281,7 +282,8 @@ impl TemplateApp {
                     *ui.spacing_mut() = spacing;
                 }
                 if bs.len() > 0 {
-                    let footer = crate::style::hex_addr_rich(format!("{:06x},{}", bs.end() / 8, bs.end() % 8));
+                    let footer = crate::style::hex_addr_rich(
+                        format!("{:06x},{}", bs.end() / 8, bs.end() % 8));
                     ui.add(Label::new(footer));
                 }
             });
@@ -319,8 +321,7 @@ impl TemplateApp {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.spacing_mut().item_spacing.y = 2.0;
-            let mut repl_has_focus = false;
+            let mut live_has_focus = false;
 
             egui::containers::ScrollArea::vertical()
                      .stick_to_bottom().show(ui, |ui| {
@@ -331,42 +332,61 @@ impl TemplateApp {
                             ui.add(Label::new(rich));
                         }
                         FrozenStr::Code(s) => {
-                            let mut is_error = false;
-                            if let Some(errctx) = self.highlight_line.as_ref() {
-                                if Xsubstr::shallow_eq(&errctx.location.whole_line, s) {
-                                    is_error = true;
+                            if let Some(e) = self.xs.last_error() {
+                                if Xsubstr::shallow_eq(&e.location.whole_line, s) {
+                                    let (a, b, c) = split_highlight(&e.location);
+                                    ui.spacing_mut().item_spacing.x = 0.0;
+                                    ui.horizontal_top(|ui| {
+                                        ui.label(RichText::new(a).monospace().color(CODE_FG));
+                                        ui.label(RichText::new(b).monospace().background_color(CODE_ERR_BG));
+                                        ui.label(RichText::new(c).monospace().color(CODE_FG));
+                                    });
+                                    let n: usize = e.location.whole_line
+                                        .chars()
+                                        .take(e.location.col)
+                                        .map(|c| if c == '\t' { egui::text::TAB_SIZE } else { 1 })
+                                        .sum();
+                                    let pos = format!("{:->1$}", '^', n + 1);
+                                    ui.label(RichText::new(pos).monospace().color(CODE_ERR_BG));
+                                    ui.label(RichText::new(format!("error: {:?}", e.err))
+                                        .monospace().color(CODE_ERR_BG));
+                                    continue;
                                 }
                             }
-                            ui.add(Label::new(crate::style::code(s.to_string(), is_error)));
                             if let Some(dbg) = self.debug_token.as_ref() {
                                 if Xsubstr::shallow_eq(&dbg.whole_line, s) {
-                                    let text = format!("{:->1$}", '^', dbg.col + 1);
-                                    let rich= crate::style::code(text, false);
-                                    ui.add(Label::new(rich));
+                                    let (a, b, c) = split_highlight(dbg);
+                                    ui.spacing_mut().item_spacing.x = 0.0;
+                                    ui.horizontal_top(|ui| {
+                                        ui.label(RichText::new(a).monospace().color(CODE_FG));
+                                        ui.label(RichText::new(b).monospace().background_color(CODE_DBG_BG));
+                                        ui.label(RichText::new(c).monospace().color(CODE_FG));
+                                    });
+                                    continue;
                                 }
                             }
+                            ui.label(RichText::new(s.to_string()).monospace().color(CODE_FG));
                         }
                     }
                 }
-
-                let code = egui::TextEdit::multiline(&mut self.repl_code)
+                let code = egui::TextEdit::multiline(&mut self.live_code)
                     .desired_rows(5)
                     .desired_width(f32::INFINITY)
                     .code_editor()
-                    .id(Id::new("repl"));
+                    .margin(vec2(0.0, 2.0))
+                    .id(Id::new("live"));
                 let res = ui.add(code);
                 if self.setup_focus {
                     res.request_focus();
                     self.setup_focus = false;
                 }
-                repl_has_focus = res.has_focus();
-                if repl_has_focus && ui.input().modifiers.ctrl 
-                && ui.input().key_down(egui::Key::Enter)  {
-                    eval_clicked = true;
+                live_has_focus = res.has_focus();
+                if live_has_focus && ui.input().modifiers.ctrl && ui.input().key_down(egui::Key::Enter)  {
+                    run_clicked = true;
                 }
             });
             
-            if !repl_has_focus {
+            if !live_has_focus {
                 let n = hotkeys::scroll_view(ctx, self.num_cols);
                 if n != 0 {
                     self.move_view(n);
@@ -381,30 +401,17 @@ impl TemplateApp {
             }
 
             if next_clicked || rnext_clicked {
-                let res = if next_clicked { self.xs.next() } else { self.xs.rnext() };
-                if let Err(err) = res {
-                    let loc = self.xs.current_location();
-                    self.debug_token = loc.clone();
-                    self.highlight_line = loc.map(|location| ErrorContext {
-                        err,
-                        location,
-                    });
-                } else {
-                    self.debug_token = self.xs.current_location();
-                    self.highlight_line = None;
-                }
-            } else if eval_clicked && !self.repl_code.trim_end().is_empty() {
+                let _res = if next_clicked { self.xs.next() } else { self.xs.rnext() };
+                self.debug_token = self.xs.current_location();
+            } else if (debug_clicked || run_clicked) && !self.live_code.trim_end().is_empty() {
                 let t = Instant::now();
-                let xsrc = Xstr::from(self.repl_code.trim_end());
-                let res = if eval_clicked {
+                let xsrc = Xstr::from(self.live_code.trim_end());
+                let res = if run_clicked {
                     self.xs.evalxstr(xsrc.clone())
                 } else {
                     self.xs.compile_xstr(xsrc.clone())
                 };
-                if res.is_err() {
-                    self.highlight_line = self.xs.last_error().clone();
-                    self.debug_token = self.highlight_line.as_ref().map(|x| x.location.clone());
-                } else if debug_clicked {
+                if res.is_ok() && debug_clicked {
                     self.debug_token = self.xs.current_location();
                 }
                 for s in xeh::lex::XstrLines::new(xsrc) {
@@ -414,10 +421,10 @@ impl TemplateApp {
                     let text = format!("OK {:0.3}s", t.elapsed().as_secs_f64()).into();
                     self.frozen_code.push(FrozenStr::Log(text));
                 }
-                self.repl_code.clear();
+                self.live_code.clear();
             }
 
-            if next_clicked || rnext_clicked || eval_clicked || rollback_clicked  {
+            if next_clicked || rnext_clicked || run_clicked || debug_clicked || rollback_clicked  {
                 if let Ok((w, h, buf)) = get_canvas_data(&mut self.xs) {
                     let image = egui::ColorImage::from_rgba_unmultiplied([w, h], &buf);
                     if let Some(tex) = self.canvas.as_mut() {
@@ -445,6 +452,16 @@ struct MyWaker();
 impl Wake for MyWaker {
     fn wake(self: Arc<Self>) {
     }
+}
+
+fn split_highlight(loc: &TokenLocation) -> (String, String, String) {
+    let line = &loc.whole_line;
+    let start = loc.col;
+    let end = (start + loc.token.len()).min(line.len());
+    let a = line.substr(0..start).to_string();
+    let b = line.substr(start..end).to_string();
+    let c = line.substr(end..).to_string();
+    (a, b, c)
 }
 
 fn get_canvas_data(xs: &mut Xstate) -> Xresult1<(usize, usize, Vec<u8>)> {

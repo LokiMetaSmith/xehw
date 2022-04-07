@@ -1,19 +1,13 @@
-use eframe::{egui::*, egui::style::*};
+use eframe::{egui::*};
 
 pub const WINDOW_BG_FILL: Color32 = Color32::from_rgb(0x10, 0x10, 0x10);
-pub const TEXT_FG: Color32 = Color32::from_rgb(0xE6, 0x9F, 0x00);
+pub const TEXT_FG: Color32 = Color32::from_rgb(0xaa, 0xaa, 0xaa);// Color32::from_rgb(0xE6, 0x9F, 0x00);
 pub const HEX_FG1: Color32 = Color32::from_rgb(0x15, 0xac, 0x0);
 pub const HEX_FG2: Color32 = Color32::from_rgb(0x15, 0x5c, 0x0);
 pub const LOG_FG: Color32 = Color32::from_rgb(0x5a, 0x5a, 0x5a);
-
-pub fn code(text: String, is_error: bool) -> RichText {
-    let r = RichText::new(text).monospace();
-    if is_error {
-        r.background_color(Color32::RED)
-    } else {
-        r
-    }
-}
+pub const CODE_FG: Color32 = Color32::from_rgb(0xee, 0xee, 0xee);
+pub const CODE_ERR_BG: Color32 = Color32::from_rgb(0x80, 0x0, 0x0);
+pub const CODE_DBG_BG: Color32 = Color32::from_rgb(0x80, 0x33, 0x33);
 
 pub fn log(text: String) -> RichText {
     RichText::new(text).monospace().color(LOG_FG)
@@ -51,3 +45,4 @@ pub fn tune(ctx: &Context, font: &FontId) {
     style.visuals.widgets.noninteractive.rounding = Rounding::same(0.0);
     ctx.set_style(style);
 }
+
