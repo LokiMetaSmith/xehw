@@ -32,6 +32,7 @@ pub struct TemplateApp {
     canvas_interaction: bool,
     setup_focus: bool,
     bytecode_open: bool,
+    help_open: bool,
 }
 
 #[derive(Clone)]
@@ -62,6 +63,7 @@ impl Default for TemplateApp {
             setup_focus: true,
             rdebug_enabled: false,
             bytecode_open: true,
+            help_open: false,
             font: FontId::monospace(14.0),
         }
     }
@@ -176,7 +178,7 @@ impl TemplateApp {
                 });
     
                 snapshot_clicked = ui.button("Snapshot").clicked();
-                if ui.input().modifiers.ctrl && ui.input().key_down(egui::Key::G) {
+                if snapshot_hotkey_pressed(ui) {
                     snapshot_clicked = true;
                 }
                 if snapshot_clicked {
@@ -186,7 +188,7 @@ impl TemplateApp {
                 }
                 if self.backup.is_some() {
                     rollback_clicked = ui.button("Rollback").clicked();
-                    if ui.input().modifiers.ctrl && ui.input().key_down(egui::Key::K) {
+                    if rollback_hotkey_pressed(ui) {
                         rollback_clicked  = true;
                     }
                     if rollback_clicked {
@@ -203,26 +205,50 @@ impl TemplateApp {
                         self.xs.stop_recording();
                     }
                 }
+                if ui.button("Help (Ctrl+G)").clicked() {
+                    self.help_open = !self.help_open;
+                }
+                if help_hotkey_pressed(ui) {
+                    self.help_open = !self.help_open;
+                }
             });
         });
 
-        egui::Window::new("Bytecode")
-        .open(&mut self.bytecode_open)
-        .default_pos(pos2(200.0, 400.0))
+        // egui::Window::new("Bytecode")
+        // .open(&mut self.bytecode_open)
+        // .default_pos(pos2(200.0, 400.0))
+        // .vscroll(true)
+        // .show(ctx, |ui| {
+        //     //ctx.style_ui(ui);
+        //     ui.label(format!("ip={}", self.xs.ip()));
+        //     ui.vertical(|ui| {
+        //         for (ip, op) in self.xs.bytecode().iter().enumerate() {
+        //             let optext = self.xs.fmt_opcode(ip, op);    
+        //             let mut rich = RichText::new(format!("{:05x}: {}", ip, optext)).monospace().color(TEXT_FG);
+        //             if ip == self.xs.ip() {
+        //                 rich = rich.background_color(TEXT_HIGLIGHT);
+        //             }
+        //             ui.label(rich);
+        //         }
+        //     });
+        // });
+
+        egui::Window::new("Help")
+        .open(&mut self.help_open)
+        .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
         .vscroll(true)
         .show(ctx, |ui| {
-            //ctx.style_ui(ui);
-            ui.label(format!("ip={}", self.xs.ip()));
-            ui.vertical(|ui| {
-                for (ip, op) in self.xs.bytecode().iter().enumerate() {
-                    let optext = self.xs.fmt_opcode(ip, op);    
-                    let mut rich = RichText::new(format!("{:05x}: {}", ip, optext)).monospace().color(TEXT_FG);
-                    if ip == self.xs.ip() {
-                        rich = rich.background_color(TEXT_HIGLIGHT);
-                    }
-                    ui.label(rich);
-                }
-            });
+            let add = |ui: &mut Ui, text, combo| {
+                ui.horizontal(|ui| {
+                    ui.label(text);
+                    ui.label(RichText::new(combo).color(GREEN));
+                });
+            };
+            ui.label("Drag and Drop file to start new workspace.");
+            add(ui, "Binary file open dialog...", "(Ctrl + O)");
+            add(ui, "Snapshot VM state", "(Ctrl + Shift + S)");
+            add(ui, "Rollback VM state", "(Ctrl + Shift + R)");
+            add(ui, "Open help", "(Ctrl + G)");
         });
 
         egui::SidePanel::left("left_panel").show(ctx, |ui| {
@@ -294,7 +320,7 @@ impl TemplateApp {
             self.move_view(v.y as isize);
 
             ui.separator();
-            ui.label("Data Stack:");
+            ui.label(RichText::new("Data Stack:").color(COMMENT_FG));
 
             egui::containers::ScrollArea::vertical().show(ui, |ui| {
                 ui.set_min_width(size1.x);
@@ -311,7 +337,7 @@ impl TemplateApp {
                             val = val.background_color(Color32::DARK_GRAY);
                         }
                         ui.horizontal(|ui| {
-                            ui.monospace(format!("{:4}:", i));
+                            ui.label(RichText::new(format!("{:4}:", i)).monospace().color(COMMENT_FG));
                             ui.label(val);
                         });
                     } else {
@@ -443,7 +469,7 @@ use std::task::{Poll, Context, Wake};
 use std::pin::Pin;
 use std::sync::Arc;
 
-use crate::hotkeys;
+use crate::hotkeys::{self, snapshot_hotkey_pressed, rollback_hotkey_pressed, help_hotkey_pressed};
 
 struct MyWaker();
 

@@ -19,3 +19,22 @@ pub fn scroll_view(ctx: &egui::Context, page_size: isize) -> isize {
         0
     }
 }
+
+// "^ + ⇧ + S"
+
+pub fn snapshot_hotkey_pressed(ui: &Ui) -> bool {
+    ui.input().modifiers.ctrl &&
+    ui.input().modifiers.shift &&
+    ui.input().key_pressed(egui::Key::S)
+}
+
+pub fn rollback_hotkey_pressed(ui: &Ui) -> bool {
+    ui.input().modifiers.ctrl &&
+    ui.input().modifiers.shift &&
+    ui.input().key_pressed(egui::Key::R)
+}
+
+pub fn help_hotkey_pressed(ui: &Ui) -> bool {
+    ui.input().modifiers.ctrl &&
+    ui.input().key_pressed(egui::Key::G)
+}
