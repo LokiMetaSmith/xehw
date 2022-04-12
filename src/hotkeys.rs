@@ -20,21 +20,33 @@ pub fn scroll_view(ctx: &egui::Context, page_size: isize) -> isize {
     }
 }
 
-// "^ + ⇧ + S"
-
-pub fn snapshot_hotkey_pressed(ui: &Ui) -> bool {
+pub fn snapshot_pressed(ui: &Ui) -> bool {
     ui.input().modifiers.ctrl &&
     ui.input().modifiers.shift &&
     ui.input().key_pressed(egui::Key::S)
 }
 
-pub fn rollback_hotkey_pressed(ui: &Ui) -> bool {
+pub fn rollback_pressed(ui: &Ui) -> bool {
     ui.input().modifiers.ctrl &&
     ui.input().modifiers.shift &&
     ui.input().key_pressed(egui::Key::R)
 }
 
-pub fn help_hotkey_pressed(ui: &Ui) -> bool {
+pub fn help_pressed(ui: &Ui) -> bool {
     ui.input().modifiers.ctrl &&
     ui.input().key_pressed(egui::Key::G)
+}
+
+pub fn next_pressed(ui: &Ui) -> bool {
+    ui.input().modifiers.alt &&
+    ui.input().key_pressed(egui::Key::ArrowRight)
+}
+
+pub fn rnext_pressed(ui: &Ui) -> bool {
+    ui.input().modifiers.alt &&
+    ui.input().key_pressed(egui::Key::ArrowLeft)
+}
+
+pub fn run_pressed(ui: &Ui) -> bool {
+    ui.input().modifiers.ctrl && ui.input().key_down(egui::Key::Enter)
 }

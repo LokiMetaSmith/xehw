@@ -4,6 +4,7 @@ use eframe::egui::*;
 use xeh::prelude::*;
 use xeh::state::{TokenLocation};
 use crate::style::*;
+use crate::hotkeys::*;
 
 #[cfg(target_arch = "wasm32")]
 type Instant = instant::Instant;
@@ -163,34 +164,27 @@ impl TemplateApp {
                 }
                 
                 ui.horizontal(|ui| {
-                    if ui.button("Run").clicked() {
-                        run_clicked = true;
-                    }
-                    if ui.button("Debug").clicked() {
-                        debug_clicked = true;
-                    }
-                    if ui.button("Next").clicked() {
-                        next_clicked = true;
-                    }
-                    if self.rdebug_enabled && ui.button("Back").clicked() {
-                        rnext_clicked = true;
+                    run_clicked = ui.button("Run").clicked();
+                    debug_clicked = ui.button("Debug").clicked();
+                    next_clicked = ui.button("Next").clicked() || next_pressed(ui);
+                    match self.xs.reverse_log.as_ref().map(|l| l.len()) {
+                        Some(n) if n > 0 => {
+                            rnext_clicked = ui.button("Back").clicked() || rnext_pressed(ui);
+                        }
+                        _ => {
+                            ui.colored_label(COMMENT_FG, "Back");
+                        }
                     }
                 });
     
-                snapshot_clicked = ui.button("Snapshot").clicked();
-                if snapshot_hotkey_pressed(ui) {
-                    snapshot_clicked = true;
-                }
+                snapshot_clicked = ui.button("Snapshot").clicked() || snapshot_pressed(ui);
                 if snapshot_clicked {
                     let t = Instant::now();
                     self.backup = Some((self.xs.clone(), self.frozen_code.to_owned()));
                     self.xs.print(&format!("Snapshot {:0.3}s", t.elapsed().as_secs_f64()));
                 }
                 if self.backup.is_some() {
-                    rollback_clicked = ui.button("Rollback").clicked();
-                    if rollback_hotkey_pressed(ui) {
-                        rollback_clicked  = true;
-                    }
+                    rollback_clicked = ui.button("Rollback").clicked() || rollback_pressed(ui);
                     if rollback_clicked {
                         if let Some((xs_old, frozen)) = self.backup.clone() {
                             self.xs = xs_old;
@@ -198,17 +192,16 @@ impl TemplateApp {
                         }
                     }
                 }
-                if ui.checkbox(&mut self.rdebug_enabled, "Reverse Debugging").changed() {
-                    if self.rdebug_enabled {
-                        self.xs.start_recording();
-                    } else {
-                        self.xs.stop_recording();
+                ui.horizontal(|ui| {
+                    if ui.checkbox(&mut self.rdebug_enabled, "Reverse Debugging").changed() {
+                        if self.rdebug_enabled {
+                            self.xs.start_recording();
+                        } else {
+                            self.xs.stop_recording();
+                        }
                     }
-                }
-                if ui.button("Help (Ctrl+G)").clicked() {
-                    self.help_open = !self.help_open;
-                }
-                if help_hotkey_pressed(ui) {
+                });
+                if ui.button("Help (Ctrl+G)").clicked() || help_pressed(ui) {
                     self.help_open = !self.help_open;
                 }
             });
@@ -244,10 +237,12 @@ impl TemplateApp {
                     ui.label(RichText::new(combo).color(GREEN));
                 });
             };
-            ui.label("Drag and Drop file to start new workspace.");
-            add(ui, "Binary file open dialog...", "(Ctrl + O)");
-            add(ui, "Snapshot VM state", "(Ctrl + Shift + S)");
-            add(ui, "Rollback VM state", "(Ctrl + Shift + R)");
+            ui.label("Drag and drop binary file to start a new program.");
+            add(ui, "Open binary file...", "(Ctrl + O)");
+            add(ui, "Program - Snapshot", "(Ctrl + Shift + S)");
+            add(ui, "Program - Rollback", "(Ctrl + Shift + R)");
+            add(ui, "Debugger - Next", "(Alt + Right)");
+            add(ui, "Debugger - Reverse Next", "(Alt + Left)");
             add(ui, "Open help", "(Ctrl + G)");
         });
 
@@ -407,7 +402,7 @@ impl TemplateApp {
                     self.setup_focus = false;
                 }
                 live_has_focus = res.has_focus();
-                if live_has_focus && ui.input().modifiers.ctrl && ui.input().key_down(egui::Key::Enter)  {
+                if live_has_focus && run_pressed(ui)  {
                     run_clicked = true;
                 }
             });
@@ -469,7 +464,7 @@ use std::task::{Poll, Context, Wake};
 use std::pin::Pin;
 use std::sync::Arc;
 
-use crate::hotkeys::{self, snapshot_hotkey_pressed, rollback_hotkey_pressed, help_hotkey_pressed};
+use crate::hotkeys::{self, snapshot_pressed, rollback_pressed, help_pressed, next_pressed, rnext_pressed};
 
 struct MyWaker();
 
