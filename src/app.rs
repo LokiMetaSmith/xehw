@@ -25,7 +25,7 @@ pub struct TemplateApp {
     frozen_code: Vec<FrozenStr>,
     debug_token: Option<TokenLocation>,
     rdebug_enabled: bool,
-    backup: Option<(Xstate, Vec<FrozenStr>)>,
+    snapshot: Option<(Xstate, Vec<FrozenStr>)>,
     bin_future: Option<Pin<BoxFuture>>,
     canvas: Option<egui::TextureHandle>,
     canvas_zoom: f32,
@@ -59,7 +59,7 @@ impl Default for TemplateApp {
             canvas_interaction: false,
             canvas_zoom: 1.0,
             canvas_offs: vec2(0.0, 0.0),
-            backup: None,
+            snapshot: None,
             bin_future: None,
             setup_focus: true,
             rdebug_enabled: false,
@@ -83,9 +83,9 @@ impl TemplateApp {
 
     fn binary_dropped(&mut self, s: Xbitstr) {
         self.xs.set_binary_input(s).unwrap();
-        if self.backup.is_none() {
+        if self.snapshot.is_none() {
             // initial snapshot
-            self.backup = Some((self.xs.clone(), self.frozen_code.to_owned()));
+            self.snapshot = Some((self.xs.clone(), self.frozen_code.to_owned()));
         }
     }
 
@@ -132,7 +132,7 @@ impl TemplateApp {
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                if ui.button("Open Binary...").clicked() {
+                if ui.button("Open...").clicked() {
                     self.bin_future = Some(Box::pin(async {
                         let res = rfd::AsyncFileDialog::new()
                             .pick_file()
@@ -164,32 +164,31 @@ impl TemplateApp {
                 }
                 
                 ui.horizontal(|ui| {
-                    run_clicked = ui.button("Run").clicked();
-                    debug_clicked = ui.button("Debug").clicked();
-                    next_clicked = ui.button("Next").clicked() || next_pressed(ui);
-                    match self.xs.reverse_log.as_ref().map(|l| l.len()) {
-                        Some(n) if n > 0 => {
-                            rnext_clicked = ui.button("Back").clicked() || rnext_pressed(ui);
-                        }
-                        _ => {
-                            ui.colored_label(COMMENT_FG, "Back");
-                        }
+                    run_clicked = ui.button("Evaluate").clicked();
+                    debug_clicked = ui.button("Compile").clicked();
+                    let has_log = self.xs.reverse_log.as_ref().map(|l| l.len() > 0).unwrap_or(false);
+                    let rnext_btn = ui.add_enabled(has_log, Button::new("Rnext"));
+                    if has_log {
+                        rnext_clicked = rnext_btn.clicked() || rnext_pressed(ui);
+                    }
+                    let next_btn = ui.add_enabled(self.xs.is_running(), Button::new("Next"));
+                    if self.xs.is_running() {
+                        next_clicked = next_btn.clicked() || next_pressed(ui);
                     }
                 });
     
                 snapshot_clicked = ui.button("Snapshot").clicked() || snapshot_pressed(ui);
                 if snapshot_clicked {
                     let t = Instant::now();
-                    self.backup = Some((self.xs.clone(), self.frozen_code.to_owned()));
+                    self.snapshot = Some((self.xs.clone(), self.frozen_code.to_owned()));
                     self.xs.print(&format!("Snapshot {:0.3}s", t.elapsed().as_secs_f64()));
                 }
-                if self.backup.is_some() {
-                    rollback_clicked = ui.button("Rollback").clicked() || rollback_pressed(ui);
-                    if rollback_clicked {
-                        if let Some((xs_old, frozen)) = self.backup.clone() {
-                            self.xs = xs_old;
-                            self.frozen_code = frozen;
-                        }
+                rollback_clicked = ui.add_enabled(self.snapshot.is_some(), Button::new("Rollback")).clicked()
+                    || rollback_pressed(ui);
+                if rollback_clicked {
+                    if let Some((xs_old, frozen)) = self.snapshot.clone() {
+                        self.xs = xs_old;
+                        self.frozen_code = frozen;
                     }
                 }
                 ui.horizontal(|ui| {
@@ -237,13 +236,17 @@ impl TemplateApp {
                     ui.label(RichText::new(combo).color(GREEN));
                 });
             };
+            ui.heading("Hotkeys");
             ui.label("Drag and drop binary file to start a new program.");
             add(ui, "Open binary file...", "(Ctrl + O)");
+            add(ui, "Program - Evaluate", "(Ctrl + Enter)");
+            //add(ui, "Program - Compile", "(Ctrl + B)");
             add(ui, "Program - Snapshot", "(Ctrl + Shift + S)");
             add(ui, "Program - Rollback", "(Ctrl + Shift + R)");
             add(ui, "Debugger - Next", "(Alt + Right)");
             add(ui, "Debugger - Reverse Next", "(Alt + Left)");
-            add(ui, "Open help", "(Ctrl + G)");
+            add(ui, "Canvas - Show", "(Ctrl + Shift + M)");
+            add(ui, "Help - Show", "(Ctrl + G)");
         });
 
         egui::SidePanel::left("left_panel").show(ctx, |ui| {
@@ -391,7 +394,7 @@ impl TemplateApp {
                     }
                 }
                 let code = egui::TextEdit::multiline(&mut self.live_code)
-                    .desired_rows(5)
+                    .desired_rows(1)
                     .desired_width(f32::INFINITY)
                     .code_editor()
                     .margin(vec2(0.0, 2.0))
@@ -408,7 +411,7 @@ impl TemplateApp {
             });
             
             if !live_has_focus {
-                let n = hotkeys::scroll_view(ctx, self.num_cols);
+                let n = scroll_view_pressed(ctx, self.num_cols);
                 if n != 0 {
                     self.move_view(n);
                 }
@@ -463,8 +466,6 @@ use std::future::{Future};
 use std::task::{Poll, Context, Wake};
 use std::pin::Pin;
 use std::sync::Arc;
-
-use crate::hotkeys::{self, snapshot_pressed, rollback_pressed, help_pressed, next_pressed, rnext_pressed};
 
 struct MyWaker();
 
@@ -523,7 +524,7 @@ impl epi::App for TemplateApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, _frame: &epi::Frame) {
-        if hotkeys::interactive_canvas_pressed(ctx) {
+        if interactive_canvas_pressed(ctx) {
             self.canvas_interaction = !self.canvas_interaction;
         }
         self.canvas(ctx, self.canvas_interaction);
