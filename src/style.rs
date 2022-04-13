@@ -30,11 +30,10 @@ pub fn hex_data_rich(text: String, consumed: bool) -> RichText {
     }
 }
 
-pub fn tune(ctx: &Context, font: &FontId) {
+pub fn tune(ctx: &Context) {
     let mut style = (*ctx.style()).clone();
-    style.override_font_id = Some(font.clone());
     style.visuals = Visuals::light();
-    //style.override_text_style = Some(TextStyle::Monospace);
+    style.override_text_style = Some(TextStyle::Monospace);
     style.visuals.override_text_color = Some(TEXT_FG);
     style.visuals.widgets.noninteractive.bg_fill = TEXT_BG;
     //style.visuals.widgets.noninteractive.bg_stroke.width = 1.0;

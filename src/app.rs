@@ -20,7 +20,6 @@ pub struct TemplateApp {
     view_start: isize,
     num_rows: isize,
     num_cols: isize,
-    font: FontId,
     live_code: String,
     frozen_code: Vec<FrozenStr>,
     debug_token: Option<TokenLocation>,
@@ -65,7 +64,6 @@ impl Default for TemplateApp {
             rdebug_enabled: false,
             bytecode_open: true,
             help_open: false,
-            font: FontId::monospace(14.0),
         }
     }
 }
@@ -250,11 +248,13 @@ impl TemplateApp {
         });
 
         egui::SidePanel::left("left_panel").show(ctx, |ui| {
-            let total_cols = self.num_cols * 3 + 2;
+            let ncols = self.num_cols * 4 + 10;
             let total_rows = self.num_rows;
-            let glyph_width = ui.fonts().glyph_width(&self.font, '0');
-            let row_height = ui.fonts().row_height(&self.font);
-            let size1 = Vec2::new(total_cols as f32 * glyph_width,
+            let text_style = TextStyle::Monospace;
+            let font = text_style.resolve(ui.style());
+            let glyph_width = ui.fonts().glyph_width(&font, '0');
+            let row_height = ui.fonts().row_height(&font);
+            let size1 = Vec2::new(ncols as f32 * glyph_width,
                 total_rows as f32 * row_height);
             ui.set_min_width(size1.x);
 
@@ -265,13 +265,13 @@ impl TemplateApp {
                 let visible_bits = self.num_rows * self.num_cols * 8;
                 let to = bs.end().min(from + visible_bits as usize);
                 let start = bs.start();
+
+                ui.set_min_height(size1.y);
                 if bs.len() > 0 {
                     let header = hex_addr_rich(
                         format!("{:06x},{}", start / 8, start % 8));
                     ui.add(Label::new(header));
                 }
-                        
-                ui.set_min_height(size1.y * 1.5);
 
                 while from < to {
                     let spacing = ui.spacing_mut().clone();
@@ -326,8 +326,8 @@ impl TemplateApp {
                 for i in 0.. {
                     if let Some(x) = self.xs.get_data(i) {
                         let mut s = self.xs.format_cell(x).unwrap();
-                        if s.chars().count() > total_cols as usize {
-                            s.truncate(total_cols as usize - 3);
+                        if s.chars().count() > ncols as usize {
+                            s.truncate(ncols as usize - 3);
                             s.push_str("...");
                         }
                         let mut val = egui::RichText::new(s).monospace();
@@ -511,7 +511,7 @@ impl epi::App for TemplateApp {
         if let Some(storage) = _storage {
             *self = epi::get_value(storage, epi::APP_KEY).unwrap_or_default()
         }
-        crate::style::tune(ctx, &self.font);
+        crate::style::tune(ctx);
     }
 
     /// Called by the frame work to save state before shutdown.
