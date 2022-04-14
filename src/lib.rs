@@ -5,6 +5,7 @@
 mod hotkeys;
 mod style;
 mod app;
+mod canvas;
 pub use app::TemplateApp;
 
 // ----------------------------------------------------------------------------

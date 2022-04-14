@@ -5,6 +5,7 @@ use xeh::prelude::*;
 use xeh::state::{TokenLocation};
 use crate::style::*;
 use crate::hotkeys::*;
+use crate::canvas::*;
 
 #[cfg(target_arch = "wasm32")]
 type Instant = instant::Instant;
@@ -22,14 +23,11 @@ pub struct TemplateApp {
     num_cols: isize,
     live_code: String,
     frozen_code: Vec<FrozenStr>,
+    canvas: Canvas,
     debug_token: Option<TokenLocation>,
     rdebug_enabled: bool,
     snapshot: Option<(Xstate, Vec<FrozenStr>)>,
     bin_future: Option<Pin<BoxFuture>>,
-    canvas: Option<egui::TextureHandle>,
-    canvas_zoom: f32,
-    canvas_offs: Vec2,
-    canvas_interaction: bool,
     setup_focus: bool,
     bytecode_open: bool,
     help_open: bool,
@@ -54,10 +52,7 @@ impl Default for TemplateApp {
             live_code: String::new(),
             frozen_code: Vec::new(),
             debug_token: None,
-            canvas: None,
-            canvas_interaction: false,
-            canvas_zoom: 1.0,
-            canvas_offs: vec2(0.0, 0.0),
+            canvas: Canvas::new(),
             snapshot: None,
             bin_future: None,
             setup_focus: true,
@@ -85,39 +80,6 @@ impl TemplateApp {
             // initial snapshot
             self.snapshot = Some((self.xs.clone(), self.frozen_code.to_owned()));
         }
-    }
-
-    fn canvas(&mut self, ctx: &egui::Context, interactive: bool) {
-        if interactive {
-            let zd = ctx.input().zoom_delta();
-            if (zd - 1.0).abs() > 0.01 {
-                let z = self.canvas_zoom + (zd - 1.0);
-                self.canvas_zoom = z.min(8.0).max(0.1);
-            }
-            if ctx.input().pointer.any_down() {
-                self.canvas_offs += ctx.input().pointer.delta();
-            }
-        }
-        if self.canvas.is_none() {
-            let t = ctx.load_texture("1", ColorImage::example());
-            self.canvas = Some(t);
-        }
-        CentralPanel::default().show(ctx, |ui| {
-            ui.with_layer_id(LayerId::background(), |ui| {
-                if let Some(texture) = self.canvas.as_ref() {
-                    let sx = self.canvas_offs.x;
-                    let sy = self.canvas_offs.y;
-                    let zoom = self.canvas_zoom;
-                    let size = texture.size_vec2();
-                    let img = egui::Image::new(texture, size);
-                    let rect = Rect {
-                        min: pos2(sx, sy),
-                        max: pos2(sx + size.x * zoom, sy + size.y * zoom)
-                    };
-                    img.paint_at(ui, rect);
-                }
-            });
-        });
     }
 
     fn editor(&mut self, ctx: &egui::Context) {
@@ -447,14 +409,8 @@ impl TemplateApp {
             }
 
             if next_clicked || rnext_clicked || run_clicked || debug_clicked || rollback_clicked  {
-                if let Ok((w, h, buf)) = get_canvas_data(&mut self.xs) {
-                    let image = egui::ColorImage::from_rgba_unmultiplied([w, h], &buf);
-                    if let Some(tex) = self.canvas.as_mut() {
-                        tex.set(image);
-                    } else {
-                        let tex = ui.ctx().load_texture("canvas-texture", image);
-                        self.canvas = Some(tex);
-                    }
+                if let Ok((w, h, buf)) = crate::canvas::copy_rgba(&mut self.xs) {
+                    self.canvas.update(ctx, w, h, buf);
                 }
             }
         });
@@ -482,17 +438,6 @@ fn split_highlight(loc: &TokenLocation) -> (String, String, String) {
     let b = line.substr(start..end).to_string();
     let c = line.substr(end..).to_string();
     (a, b, c)
-}
-
-fn get_canvas_data(xs: &mut Xstate) -> Xresult1<(usize, usize, Vec<u8>)> {
-    let (w, h) = xeh::d2_plugin::size(xs)?;
-    if w > 0 && h  > 0 {
-        let mut buf = Vec::new();
-        xeh::d2_plugin::copy_rgba_data(xs, &mut buf)?;
-        Ok((w, h, buf))
-    } else {
-        Err(Xerr::NotFound)
-    }
 }
 
 impl epi::App for TemplateApp {
@@ -524,11 +469,8 @@ impl epi::App for TemplateApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, _frame: &epi::Frame) {
-        if interactive_canvas_pressed(ctx) {
-            self.canvas_interaction = !self.canvas_interaction;
-        }
-        self.canvas(ctx, self.canvas_interaction);
-        if !self.canvas_interaction {
+        self.canvas.ui(ctx);
+        if !self.canvas.interactive() {
             self.editor(ctx);
         }
     }
