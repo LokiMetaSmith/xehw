@@ -18,7 +18,7 @@ type BoxFuture = Box<dyn Future<Output = Vec<u8>>>;
 #[cfg_attr(feature = "persistence", serde(default))] // if we add new fields, give them default values when deserializing old state
 pub struct TemplateApp {
     xs: Xstate,
-    view_start: isize,
+    start_row: isize,
     num_rows: isize,
     num_cols: isize,
     live_code: String,
@@ -42,11 +42,11 @@ enum FrozenStr {
 impl Default for TemplateApp {
     fn default() -> Self {
         let mut xs = Xstate::boot().unwrap();
-        xs.capture_stdout();
+        xs.intercept_stdout(true);
         xeh::d2_plugin::load(&mut xs).unwrap();
         Self {
             xs,
-            view_start: 0,
+            start_row: 0,
             num_rows: 10,
             num_cols: 8,
             live_code: String::new(),
@@ -65,13 +65,18 @@ impl Default for TemplateApp {
 
 impl TemplateApp {
     fn move_view(&mut self, nrows: isize) {
-        let limit = (self.current_bstr().end() / 8) as isize;
-        let n = self.view_start + self.num_rows * nrows;
-        self.view_start = n.max(0).min((limit - 1).max(0));
+        let n = (self.start_row + nrows)
+            .max(0)
+            .min(self.current_bstr().end() as isize / (self.num_cols * 8));
+        self.start_row = n.max(0);
     }
 
-    fn current_bstr(&self) -> Xbitstr {
-        self.xs.get_var_value("bitstr/input").unwrap().clone().to_bitstring().unwrap()
+    fn current_bstr(&self) -> &Xbitstr {
+        self.xs.get_var_value("current-bitstr").unwrap().bitstr().unwrap()
+    }
+
+    fn current_offset(&self) -> usize {
+        self.xs.get_var_value("offset").unwrap().to_usize().unwrap()
     }
 
     fn binary_dropped(&mut self, s: Xbitstr) {
@@ -221,17 +226,17 @@ impl TemplateApp {
             ui.set_min_width(size1.x);
 
             let xgrid = ui.vertical(|ui|{
-                let bs = self.current_bstr();
-                let mut from = (self.view_start as usize) * 8;
-                let mut it = bs.iter8_unleashed(from);
+                let offset = self.current_offset();
+                let mut from = (self.start_row * self.num_cols * 8) as usize;
+                let bs = self.current_bstr().seek(from).unwrap_or_default();
+                let mut it = bs.iter8();
                 let visible_bits = self.num_rows * self.num_cols * 8;
                 let to = bs.end().min(from + visible_bits as usize);
-                let start = bs.start();
 
                 ui.set_min_height(size1.y);
                 if bs.len() > 0 {
                     let header = hex_addr_rich(
-                        format!("{:06x},{}", start / 8, start % 8));
+                        format!("{:06x},{}", offset / 8, offset % 8));
                     ui.add(Label::new(header));
                 }
 
@@ -247,7 +252,7 @@ impl TemplateApp {
                         for i in 0..self.num_cols {
                             if let Some((val, n)) = it.next() { 
                                 let hex_data = hex_data_rich(
-                                    format!(" {:02x}", val), from < start);
+                                    format!(" {:02x}", val), from < offset);
                                 ui.label(hex_data);
                                 let c= xeh::bitstring_mod::byte_to_dump_char(val);
                                 ascii.push(c);
@@ -379,10 +384,9 @@ impl TemplateApp {
                 }
             }
 
-            if let Some(log) = self.xs.console() {
-                if !log.is_empty() {
-                    let text = log.take().into();
-                    self.frozen_code.push(FrozenStr::Log(text));
+            if let Some(s) = self.xs.stdout() {
+                if !s.is_empty() {
+                    self.frozen_code.push(FrozenStr::Log(s.take()));
                 }
             }
 

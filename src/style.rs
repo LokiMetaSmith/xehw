@@ -24,7 +24,7 @@ pub fn hex_addr_rich(text: String) -> RichText {
 pub fn hex_data_rich(text: String, consumed: bool) -> RichText {
     let r = RichText::new(text).monospace().color(HEX_DATA_FG);
     if consumed {
-        r.background_color(Color32::DARK_GRAY)
+        r.background_color(TEXT_HIGLIGHT)
     } else {
         r
     }
