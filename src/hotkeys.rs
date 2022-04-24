@@ -50,3 +50,11 @@ pub fn rnext_pressed(ui: &Ui) -> bool {
 pub fn run_pressed(ui: &Ui) -> bool {
     ui.input().modifiers.ctrl && ui.input().key_down(egui::Key::Enter)
 }
+
+pub fn switch_to_grid_pressed(i: &InputState) -> bool {
+    i.modifiers.ctrl && i.key_down(egui::Key::Num1)
+}
+
+pub fn switch_to_code_pressed(i: &InputState) -> bool {
+    i.modifiers.ctrl && i.key_down(egui::Key::Num2)
+}

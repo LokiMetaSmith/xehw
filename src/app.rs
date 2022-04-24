@@ -2,7 +2,7 @@ use eframe::{egui, epi};
 use eframe::egui::*;
 
 use xeh::prelude::*;
-use crate::style::*;
+use crate::{style::*, hotkeys};
 use crate::hotkeys::*;
 use crate::canvas::*;
 
@@ -210,10 +210,12 @@ impl TemplateApp {
             add(ui, "Debugger - Next", "(Alt + Right)");
             add(ui, "Debugger - Reverse Next", "(Alt + Left)");
             add(ui, "Canvas - Show", "(Ctrl + Shift + M)");
+            add(ui, "Switch to Hex Panel", "(Ctrl + 1)");
+            add(ui, "Switch to Code Panel", "(Ctrl + 2)");
             add(ui, "Help - Show", "(Ctrl + G)");
         });
 
-        egui::SidePanel::left("left_panel").show(ctx, |ui| {
+       let hex_panel = egui::SidePanel::left("left_panel").show(ctx, |ui| {
             let ncols = self.num_cols * 4 + 10;
             let total_rows = self.num_rows;
             let text_style = TextStyle::Monospace;
@@ -310,6 +312,9 @@ impl TemplateApp {
                 }
             });
         });
+        if hotkeys::switch_to_grid_pressed(&ctx.input()) {
+            hex_panel.response.request_focus();
+        }
 
         egui::CentralPanel::default().show(ctx, |ui| {
             let mut live_has_focus = false;
@@ -366,6 +371,10 @@ impl TemplateApp {
                     .margin(vec2(0.0, 2.0))
                     .id(Id::new("live"));
                 let res = ui.add(code);
+                if hotkeys::switch_to_code_pressed(&ctx.input()) {
+                    res.request_focus();
+                    self.setup_focus = false;
+                }
                 if self.setup_focus {
                     res.request_focus();
                     self.setup_focus = false;
