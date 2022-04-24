@@ -2,7 +2,6 @@ use eframe::{egui, epi};
 use eframe::egui::*;
 
 use xeh::prelude::*;
-use xeh::state::{TokenLocation};
 use crate::style::*;
 use crate::hotkeys::*;
 use crate::canvas::*;
@@ -323,23 +322,23 @@ impl TemplateApp {
                             ui.label(RichText::new(s.to_string()).monospace().color(COMMENT_FG));
                         }
                         FrozenStr::Code(s) => {
-                            if let Some(e) = self.xs.last_error() {
-                                if Xsubstr::shallow_eq(&e.location.whole_line, s) {
-                                    let (a, b, c) = split_highlight(&e.location);
+                            if let Some((err, loc)) = self.xs.last_error() {
+                                if Xsubstr::shallow_eq(&loc.whole_line, s) {
+                                    let (a, b, c) = split_highlight(&loc);
                                     ui.spacing_mut().item_spacing.x = 0.0;
                                     ui.horizontal_top(|ui| {
                                         ui.label(RichText::new(a).monospace().color(CODE_FG));
                                         ui.label(RichText::new(b).monospace().background_color(CODE_ERR_BG));
                                         ui.label(RichText::new(c).monospace().color(CODE_FG));
                                     });
-                                    let n: usize = e.location.whole_line
+                                    let n: usize = loc.whole_line
                                         .chars()
-                                        .take(e.location.col)
+                                        .take(loc.col)
                                         .map(|c| if c == '\t' { egui::text::TAB_SIZE } else { 1 })
                                         .sum();
                                     let pos = format!("{:->1$}", '^', n + 1);
                                     ui.label(RichText::new(pos).monospace().color(CODE_ERR_BG));
-                                    ui.label(RichText::new(format!("error: {:?}", e.err))
+                                    ui.label(RichText::new(format!("error: {:?}", err))
                                         .monospace().color(CODE_ERR_BG));
                                     continue;
                                 }
@@ -392,7 +391,7 @@ impl TemplateApp {
 
             if next_clicked || rnext_clicked {
                 let _res = if next_clicked { self.xs.next() } else { self.xs.rnext() };
-                self.debug_token = self.xs.current_location();
+                self.debug_token = self.xs.token_from_current_ip();
             } else if (debug_clicked || run_clicked) && !self.live_code.trim_end().is_empty() {
                 let t = Instant::now();
                 let xsrc = Xstr::from(self.live_code.trim_end());
@@ -401,7 +400,7 @@ impl TemplateApp {
                 } else {
                     self.xs.compile_xstr(xsrc.clone())
                 };
-                self.debug_token = self.xs.current_location();
+                self.debug_token = self.xs.token_from_current_ip();
                 for s in xeh::lex::XstrLines::new(xsrc) {
                     self.frozen_code.push(FrozenStr::Code(s))
                 }
