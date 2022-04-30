@@ -90,7 +90,6 @@ impl TemplateApp {
         let mut snapshot_clicked = false;
         let mut rollback_clicked = false;
         let mut run_clicked = false;
-        let mut debug_clicked = false;
         let mut next_clicked = false;
         let mut rnext_clicked = false;
 
@@ -129,7 +128,6 @@ impl TemplateApp {
                 
                 ui.horizontal(|ui| {
                     run_clicked = ui.button("Evaluate").clicked();
-                    debug_clicked = ui.button("Compile").clicked();
                     let has_log = self.xs.reverse_log.as_ref().map(|l| l.len() > 0).unwrap_or(false);
                     let rnext_btn = ui.add_enabled(has_log, Button::new("Rnext"));
                     if has_log {
@@ -204,7 +202,6 @@ impl TemplateApp {
             ui.label("Drag and drop binary file to start a new program.");
             add(ui, "Open binary file...", "(Ctrl + O)");
             add(ui, "Program - Evaluate", "(Ctrl + Enter)");
-            //add(ui, "Program - Compile", "(Ctrl + B)");
             add(ui, "Program - Snapshot", "(Ctrl + Shift + S)");
             add(ui, "Program - Rollback", "(Ctrl + Shift + R)");
             add(ui, "Debugger - Next", "(Alt + Right)");
@@ -255,7 +252,7 @@ impl TemplateApp {
                                 let hex_data = hex_data_rich(
                                     format!(" {:02x}", val), from < offset);
                                 ui.label(hex_data);
-                                let c= xeh::bitstring_mod::byte_to_dump_char(val);
+                                let c= xeh::bitstr_ext::byte_to_dump_char(val);
                                 ascii.push(c);
                                 from += n as usize;
                             } else {
@@ -343,7 +340,7 @@ impl TemplateApp {
                                         .sum();
                                     let pos = format!("{:->1$}", '^', n + 1);
                                     ui.label(RichText::new(pos).monospace().color(CODE_ERR_BG));
-                                    ui.label(RichText::new(format!("error: {:?}", err))
+                                    ui.label(RichText::new(format!("error: {}", err))
                                         .monospace().color(CODE_ERR_BG));
                                     continue;
                                 }
@@ -401,14 +398,10 @@ impl TemplateApp {
             if next_clicked || rnext_clicked {
                 let _res = if next_clicked { self.xs.next() } else { self.xs.rnext() };
                 self.debug_token = self.xs.token_from_current_ip();
-            } else if (debug_clicked || run_clicked) && !self.live_code.trim_end().is_empty() {
+            } else if run_clicked && !self.live_code.trim().is_empty() {
                 let t = Instant::now();
                 let xsrc = Xstr::from(self.live_code.trim_end());
-                let res = if run_clicked {
-                    self.xs.evalxstr(xsrc.clone())
-                } else {
-                    self.xs.compile_xstr(xsrc.clone())
-                };
+                let res = self.xs.evalxstr(xsrc.clone());
                 self.debug_token = self.xs.token_from_current_ip();
                 for s in xeh::lex::XstrLines::new(xsrc) {
                     self.frozen_code.push(FrozenStr::Code(s))
@@ -419,8 +412,7 @@ impl TemplateApp {
                 }
                 self.live_code.clear();
             }
-
-            if next_clicked || rnext_clicked || run_clicked || debug_clicked || rollback_clicked  {
+            if next_clicked || rnext_clicked || run_clicked || rollback_clicked  {
                 if let Ok((w, h, buf)) = crate::canvas::copy_rgba(&mut self.xs) {
                     self.canvas.update(ctx, w, h, buf);
                 }
