@@ -21,7 +21,9 @@ pub struct TemplateApp {
     num_rows: isize,
     num_cols: isize,
     live_code: String,
+    trial_code: Option<String>,
     frozen_code: Vec<FrozenStr>,
+    last_dt: Option<f64>,
     canvas: Canvas,
     debug_token: Option<TokenLocation>,
     rdebug_enabled: bool,
@@ -50,6 +52,8 @@ impl Default for TemplateApp {
             num_cols: 8,
             live_code: String::new(),
             frozen_code: Vec::new(),
+            trial_code: None,
+            last_dt: None,
             debug_token: None,
             canvas: Canvas::new(),
             snapshot: None,
@@ -143,7 +147,7 @@ impl TemplateApp {
                 if snapshot_clicked {
                     let t = Instant::now();
                     self.snapshot = Some((self.xs.clone(), self.frozen_code.to_owned()));
-                    self.xs.print(&format!("Snapshot {:0.3}s", t.elapsed().as_secs_f64()));
+                    self.last_dt = Some(t.elapsed().as_secs_f64());
                 }
                 rollback_clicked = ui.add_enabled(self.snapshot.is_some(), Button::new("Rollback")).clicked()
                     || rollback_pressed(ui);
@@ -361,6 +365,9 @@ impl TemplateApp {
                         }
                     }
                 }
+                if let Some(secs) = self.last_dt {
+                    ui.colored_label(COMMENT_FG, format!("{:.4}s", secs));
+                }
                 let code = egui::TextEdit::multiline(&mut self.live_code)
                     .desired_rows(1)
                     .desired_width(f32::INFINITY)
@@ -406,10 +413,7 @@ impl TemplateApp {
                 for s in xeh::lex::XstrLines::new(xsrc) {
                     self.frozen_code.push(FrozenStr::Code(s))
                 }
-                if res.is_ok() {
-                    let text = format!("OK {:0.3}s", t.elapsed().as_secs_f64()).into();
-                    self.frozen_code.push(FrozenStr::Log(text));
-                }
+                self.last_dt = Some(t.elapsed().as_secs_f64());
                 self.live_code.clear();
             }
             if next_clicked || rnext_clicked || run_clicked || rollback_clicked  {
