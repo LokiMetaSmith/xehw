@@ -39,7 +39,7 @@ pub fn rnext_pressed(ui: &Ui) -> bool {
 }
 
 pub fn run_pressed(ui: &Ui) -> bool {
-    ui.input().modifiers.ctrl && ui.input().key_down(egui::Key::Enter)
+    ui.input().modifiers.ctrl && ui.input().key_pressed(egui::Key::R)
 }
 
 pub fn switch_to_grid_pressed(i: &InputState) -> bool {
