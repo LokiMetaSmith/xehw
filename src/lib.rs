@@ -2,10 +2,10 @@
 //#![cfg_attr(not(debug_assertions), deny(warnings))] // Forbid warnings in release builds
 #![warn(clippy::all, rust_2018_idioms)]
 
-mod hotkeys;
-mod style;
 mod app;
 mod canvas;
+mod hotkeys;
+mod style;
 pub use app::TemplateApp;
 
 // ----------------------------------------------------------------------------

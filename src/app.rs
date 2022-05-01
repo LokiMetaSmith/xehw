@@ -1,10 +1,10 @@
-use eframe::{egui, epi};
 use eframe::egui::*;
+use eframe::{egui, epi};
 
-use xeh::prelude::*;
-use crate::{style::*, hotkeys};
-use crate::hotkeys::*;
 use crate::canvas::*;
+use crate::hotkeys::*;
+use crate::{hotkeys, style::*};
+use xeh::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
 type Instant = instant::Instant;
@@ -75,7 +75,11 @@ impl TemplateApp {
     }
 
     fn current_bstr(&self) -> &Xbitstr {
-        self.xs.get_var_value("current-bitstr").unwrap().bitstr().unwrap()
+        self.xs
+            .get_var_value("current-bitstr")
+            .unwrap()
+            .bitstr()
+            .unwrap()
     }
 
     fn current_offset(&self) -> usize {
@@ -125,9 +129,7 @@ impl TemplateApp {
             ui.horizontal(|ui| {
                 if ui.button("Open...").clicked() {
                     self.bin_future = Some(Box::pin(async {
-                        let res = rfd::AsyncFileDialog::new()
-                            .pick_file()
-                            .await;
+                        let res = rfd::AsyncFileDialog::new().pick_file().await;
                         if let Some(file) = res {
                             file.read().await
                         } else {
@@ -153,24 +155,28 @@ impl TemplateApp {
                         self.binary_dropped(s);
                     }
                 }
-                
+
                 run_clicked = ui.button("Run").clicked();
-                snapshot_clicked = ui.add_enabled(!self.is_trial(), Button::new("Snapshot")).clicked()
-                 || snapshot_pressed(ui);
+                snapshot_clicked = ui
+                    .add_enabled(!self.is_trial(), Button::new("Snapshot"))
+                    .clicked()
+                    || snapshot_pressed(ui);
                 if snapshot_clicked && !self.is_trial() {
                     let t = Instant::now();
                     self.snapshot();
                     self.last_dt = Some(t.elapsed().as_secs_f64());
                 }
                 let rollback_enabled = self.snapshot.is_some() && !self.is_trial();
-                rollback_clicked = ui.add_enabled(rollback_enabled, Button::new("Rollback")).clicked()
+                rollback_clicked = ui
+                    .add_enabled(rollback_enabled, Button::new("Rollback"))
+                    .clicked()
                     || rollback_pressed(ui);
                 if rollback_clicked && rollback_enabled {
                     let t = Instant::now();
                     self.rollback();
                     self.last_dt = Some(t.elapsed().as_secs_f64());
                 }
-                repl_clicked = ui.radio(self.trial_code.is_none(), "REPL").clicked() ;
+                repl_clicked = ui.radio(self.trial_code.is_none(), "REPL").clicked();
                 trial_clicked = ui.radio(self.trial_code.is_some(), "TRIAL").clicked();
                 if ui.checkbox(&mut self.rdebug_enabled, "RRecord").changed() {
                     self.xs.set_recording_enabled(self.rdebug_enabled);
@@ -194,7 +200,7 @@ impl TemplateApp {
         //     ui.label(format!("ip={}", self.xs.ip()));
         //     ui.vertical(|ui| {
         //         for (ip, op) in self.xs.bytecode().iter().enumerate() {
-        //             let optext = self.xs.fmt_opcode(ip, op);    
+        //             let optext = self.xs.fmt_opcode(ip, op);
         //             let mut rich = RichText::new(format!("{:05x}: {}", ip, optext)).monospace().color(TEXT_FG);
         //             if ip == self.xs.ip() {
         //                 rich = rich.background_color(TEXT_HIGLIGHT);
@@ -205,43 +211,42 @@ impl TemplateApp {
         // });
 
         egui::Window::new("Help")
-        .open(&mut self.help_open)
-        .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
-        .vscroll(true)
-        .show(ctx, |ui| {
-            let add = |ui: &mut Ui, text, combo| {
-                ui.horizontal(|ui| {
-                    ui.label(text);
-                    ui.label(RichText::new(combo).color(GREEN));
-                });
-            };
-            ui.heading("Hotkeys");
-            ui.label("Drag and drop binary file to start a new program.");
-            add(ui, "Open binary file...", "(Ctrl + O)");
-            add(ui, "Program - Run", "(Ctrl + Enter)");
-            add(ui, "Program - Snapshot", "(Ctrl + Shift + S)");
-            add(ui, "Program - Rollback", "(Ctrl + Shift + R)");
-            add(ui, "Debugger - Next", "(Alt + Right)");
-            add(ui, "Debugger - Reverse Next", "(Alt + Left)");
-            add(ui, "Debugger - Toogle Recording", "(Alt + ?)");
-            add(ui, "Canvas - Show", "(Ctrl + Shift + M)");
-            add(ui, "Switch to Hex Panel", "(Ctrl + 1)");
-            add(ui, "Switch to Code Panel", "(Ctrl + 2)");
-            add(ui, "Help - Show", "(Ctrl + G)");
-        });
+            .open(&mut self.help_open)
+            .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
+            .vscroll(true)
+            .show(ctx, |ui| {
+                let add = |ui: &mut Ui, text, combo| {
+                    ui.horizontal(|ui| {
+                        ui.label(text);
+                        ui.label(RichText::new(combo).color(GREEN));
+                    });
+                };
+                ui.heading("Hotkeys");
+                ui.label("Drag and drop binary file to start a new program.");
+                add(ui, "Open binary file...", "(Ctrl + O)");
+                add(ui, "Program - Run", "(Ctrl + Enter)");
+                add(ui, "Program - Snapshot", "(Ctrl + Shift + S)");
+                add(ui, "Program - Rollback", "(Ctrl + Shift + R)");
+                add(ui, "Debugger - Next", "(Alt + Right)");
+                add(ui, "Debugger - Reverse Next", "(Alt + Left)");
+                add(ui, "Debugger - Toogle Recording", "(Alt + ?)");
+                add(ui, "Canvas - Show", "(Ctrl + Shift + M)");
+                add(ui, "Switch to Hex Panel", "(Ctrl + 1)");
+                add(ui, "Switch to Code Panel", "(Ctrl + 2)");
+                add(ui, "Help - Show", "(Ctrl + G)");
+            });
 
-       let hex_panel = egui::SidePanel::left("left_panel").show(ctx, |ui| {
+        let hex_panel = egui::SidePanel::left("left_panel").show(ctx, |ui| {
             let ncols = self.num_cols * 4 + 10;
             let total_rows = self.num_rows;
             let text_style = TextStyle::Monospace;
             let font = text_style.resolve(ui.style());
             let glyph_width = ui.fonts().glyph_width(&font, '0');
             let row_height = ui.fonts().row_height(&font);
-            let size1 = Vec2::new(ncols as f32 * glyph_width,
-                total_rows as f32 * row_height);
+            let size1 = Vec2::new(ncols as f32 * glyph_width, total_rows as f32 * row_height);
             ui.set_min_width(size1.x);
 
-            let xgrid = ui.vertical(|ui|{
+            let xgrid = ui.vertical(|ui| {
                 let offset = self.current_offset();
                 let mut from = (self.start_row * self.num_cols * 8) as usize;
                 let bs = self.current_bstr().seek(from).unwrap_or_default();
@@ -267,11 +272,11 @@ impl TemplateApp {
                         let mut ascii = String::new();
                         ascii.push_str("  ");
                         for i in 0..self.num_cols {
-                            if let Some((val, n)) = it.next() { 
-                                let hex_data = hex_data_rich(
-                                    format!(" {:02x}", val), from < offset);
+                            if let Some((val, n)) = it.next() {
+                                let hex_data =
+                                    hex_data_rich(format!(" {:02x}", val), from < offset);
                                 ui.label(hex_data);
-                                let c= xeh::bitstr_ext::byte_to_dump_char(val);
+                                let c = xeh::bitstr_ext::byte_to_dump_char(val);
                                 ascii.push(c);
                                 from += n as usize;
                             } else {
@@ -291,8 +296,8 @@ impl TemplateApp {
                     *ui.spacing_mut() = spacing;
                 }
                 if bs.len() > 0 {
-                    let footer = crate::style::hex_addr_rich(
-                        self.hex_offset_str(bs.end(), bs.len(), ' '));
+                    let footer =
+                        crate::style::hex_addr_rich(self.hex_offset_str(bs.end(), bs.len(), ' '));
                     ui.add(Label::new(footer));
                 }
             });
@@ -319,7 +324,11 @@ impl TemplateApp {
                             val = val.background_color(Color32::DARK_GRAY);
                         }
                         ui.horizontal(|ui| {
-                            ui.label(RichText::new(format!("{:4}:", i)).monospace().color(COMMENT_FG));
+                            ui.label(
+                                RichText::new(format!("{:4}:", i))
+                                    .monospace()
+                                    .color(COMMENT_FG),
+                            );
                             ui.label(val);
                         });
                     } else {
@@ -336,85 +345,106 @@ impl TemplateApp {
             let mut live_has_focus = false;
 
             egui::containers::ScrollArea::vertical()
-                     .stick_to_bottom().show(ui, |ui| {
-                for x in self.frozen_code.iter() {
-                    match x {
-                        FrozenStr::Log(s) => {
-                            ui.label(RichText::new(s.to_string()).monospace().color(COMMENT_FG));
+                .stick_to_bottom()
+                .show(ui, |ui| {
+                    for x in self.frozen_code.iter() {
+                        match x {
+                            FrozenStr::Log(s) => {
+                                ui.label(
+                                    RichText::new(s.to_string()).monospace().color(COMMENT_FG),
+                                );
+                            }
+                            FrozenStr::Code(s) => {
+                                if let Some((err, loc)) = self.xs.last_error() {
+                                    if Xsubstr::shallow_eq(&loc.whole_line, s) {
+                                        let (a, b, c) = split_highlight(&loc);
+                                        ui.spacing_mut().item_spacing.x = 0.0;
+                                        ui.horizontal_top(|ui| {
+                                            ui.label(RichText::new(a).monospace().color(CODE_FG));
+                                            ui.label(
+                                                RichText::new(b)
+                                                    .monospace()
+                                                    .background_color(CODE_ERR_BG),
+                                            );
+                                            ui.label(RichText::new(c).monospace().color(CODE_FG));
+                                        });
+                                        let n: usize =
+                                            loc.whole_line
+                                                .chars()
+                                                .take(loc.col)
+                                                .map(|c| {
+                                                    if c == '\t' {
+                                                        egui::text::TAB_SIZE
+                                                    } else {
+                                                        1
+                                                    }
+                                                })
+                                                .sum();
+                                        let pos = format!("{:->1$}", '^', n + 1);
+                                        ui.label(RichText::new(pos).monospace().color(CODE_ERR_BG));
+                                        ui.label(
+                                            RichText::new(format!("error: {}", err))
+                                                .monospace()
+                                                .color(CODE_ERR_BG),
+                                        );
+                                        continue;
+                                    }
+                                }
+                                if let Some(dbg) = self.debug_token.as_ref() {
+                                    if Xsubstr::shallow_eq(&dbg.whole_line, s) {
+                                        let (a, b, c) = split_highlight(dbg);
+                                        ui.spacing_mut().item_spacing.x = 0.0;
+                                        ui.horizontal_top(|ui| {
+                                            ui.label(RichText::new(a).monospace().color(CODE_FG));
+                                            ui.label(
+                                                RichText::new(b)
+                                                    .monospace()
+                                                    .background_color(CODE_DBG_BG),
+                                            );
+                                            ui.label(RichText::new(c).monospace().color(CODE_FG));
+                                        });
+                                        continue;
+                                    }
+                                }
+                                ui.label(RichText::new(s.to_string()).monospace().color(CODE_FG));
+                            }
                         }
-                        FrozenStr::Code(s) => {
+                    }
+                    ui.horizontal(|ui| {
+                        if self.is_trial() {
                             if let Some((err, loc)) = self.xs.last_error() {
-                                if Xsubstr::shallow_eq(&loc.whole_line, s) {
-                                    let (a, b, c) = split_highlight(&loc);
-                                    ui.spacing_mut().item_spacing.x = 0.0;
-                                    ui.horizontal_top(|ui| {
-                                        ui.label(RichText::new(a).monospace().color(CODE_FG));
-                                        ui.label(RichText::new(b).monospace().background_color(CODE_ERR_BG));
-                                        ui.label(RichText::new(c).monospace().color(CODE_FG));
-                                    });
-                                    let n: usize = loc.whole_line
-                                        .chars()
-                                        .take(loc.col)
-                                        .map(|c| if c == '\t' { egui::text::TAB_SIZE } else { 1 })
-                                        .sum();
-                                    let pos = format!("{:->1$}", '^', n + 1);
-                                    ui.label(RichText::new(pos).monospace().color(CODE_ERR_BG));
-                                    ui.label(RichText::new(format!("error: {}", err))
-                                        .monospace().color(CODE_ERR_BG));
-                                    continue;
-                                }
+                                let errmsg = format!("{}", err);
+                                ui.colored_label(CODE_ERR_BG, errmsg);
                             }
-                            if let Some(dbg) = self.debug_token.as_ref() {
-                                if Xsubstr::shallow_eq(&dbg.whole_line, s) {
-                                    let (a, b, c) = split_highlight(dbg);
-                                    ui.spacing_mut().item_spacing.x = 0.0;
-                                    ui.horizontal_top(|ui| {
-                                        ui.label(RichText::new(a).monospace().color(CODE_FG));
-                                        ui.label(RichText::new(b).monospace().background_color(CODE_DBG_BG));
-                                        ui.label(RichText::new(c).monospace().color(CODE_FG));
-                                    });
-                                    continue;
-                                }
-                            }
-                            ui.label(RichText::new(s.to_string()).monospace().color(CODE_FG));
                         }
-                    }
-                }
-                ui.horizontal(|ui| {
-                    if self.is_trial()  {
-                        if let Some((err, loc)) = self.xs.last_error() {
-                            let errmsg = format!("{}", err);
-                            ui.colored_label(CODE_ERR_BG, errmsg);
+                        if self.xs.last_error().is_none() {
+                            ui.colored_label(COMMENT_FG, "OK");
                         }
+                        if let Some(secs) = self.last_dt {
+                            ui.colored_label(COMMENT_FG, format!("{:.4}s", secs));
+                        }
+                    });
+                    let code = egui::TextEdit::multiline(&mut self.live_code)
+                        .desired_rows(1)
+                        .desired_width(f32::INFINITY)
+                        .code_editor()
+                        .margin(vec2(0.0, 2.0))
+                        .id(Id::new("live"));
+                    let res = ui.add(code);
+                    if hotkeys::switch_to_code_pressed(&ctx.input()) {
+                        res.request_focus();
+                        self.setup_focus = false;
                     }
-                    if self.xs.last_error().is_none() {
-                        ui.colored_label(COMMENT_FG, "OK");
+                    if self.setup_focus {
+                        res.request_focus();
+                        self.setup_focus = false;
                     }
-                    if let Some(secs) = self.last_dt {
-                        ui.colored_label(COMMENT_FG, format!("{:.4}s", secs));
+                    live_has_focus = res.has_focus();
+                    if live_has_focus && run_pressed(ui) {
+                        run_clicked = true;
                     }
                 });
-                let code = egui::TextEdit::multiline(&mut self.live_code)
-                    .desired_rows(1)
-                    .desired_width(f32::INFINITY)
-                    .code_editor()
-                    .margin(vec2(0.0, 2.0))
-                    .id(Id::new("live"));
-                let res = ui.add(code);
-                if hotkeys::switch_to_code_pressed(&ctx.input()) {
-                    res.request_focus();
-                    self.setup_focus = false;
-                }
-                if self.setup_focus {
-                    res.request_focus();
-                    self.setup_focus = false;
-                }
-                live_has_focus = res.has_focus();
-                if live_has_focus && run_pressed(ui)  {
-                    run_clicked = true;
-                }
-            });
-            
+
             if !live_has_focus {
                 let n = scroll_view_pressed(ctx, self.num_cols);
                 if n != 0 {
@@ -451,7 +481,11 @@ impl TemplateApp {
             }
             if next_clicked || rnext_clicked {
                 let t = Instant::now();
-                let _res = if next_clicked { self.xs.next() } else { self.xs.rnext() };
+                let _res = if next_clicked {
+                    self.xs.next()
+                } else {
+                    self.xs.rnext()
+                };
                 self.debug_token = self.xs.location_from_current_ip();
                 self.last_dt = Some(t.elapsed().as_secs_f64());
             } else if run_clicked && has_some_code {
@@ -469,14 +503,13 @@ impl TemplateApp {
                 self.live_code.clear();
                 self.last_dt = Some(t.elapsed().as_secs_f64());
             }
-            if next_clicked || rnext_clicked || run_clicked || rollback_clicked  {
+            if next_clicked || rnext_clicked || run_clicked || rollback_clicked {
                 self.debug_token = self.xs.location_from_current_ip();
                 if let Ok((w, h, buf)) = crate::canvas::copy_rgba(&mut self.xs) {
                     self.canvas.update(ctx, w, h, buf);
                 }
             }
         });
-
     }
 
     fn is_trial(&self) -> bool {
@@ -484,16 +517,15 @@ impl TemplateApp {
     }
 }
 
-use std::future::{Future};
-use std::task::{Poll, Context, Wake};
+use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll, Wake};
 
 struct MyWaker();
 
 impl Wake for MyWaker {
-    fn wake(self: Arc<Self>) {
-    }
+    fn wake(self: Arc<Self>) {}
 }
 
 fn split_highlight(loc: &TokenLocation) -> (String, String, String) {

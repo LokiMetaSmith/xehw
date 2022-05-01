@@ -50,7 +50,7 @@ impl Canvas {
                     let img = Image::new(texture, size);
                     let rect = Rect {
                         min: pos2(sx, sy),
-                        max: pos2(sx + size.x * zoom, sy + size.y * zoom)
+                        max: pos2(sx + size.x * zoom, sy + size.y * zoom),
                     };
                     img.paint_at(ui, rect);
                 }
@@ -71,7 +71,7 @@ impl Canvas {
 
 pub fn copy_rgba(xs: &mut Xstate) -> Xresult1<(usize, usize, Vec<u8>)> {
     let (w, h) = xeh::d2_plugin::size(xs)?;
-    if w > 0 && h  > 0 {
+    if w > 0 && h > 0 {
         let mut buf = Vec::new();
         xeh::d2_plugin::copy_rgba_data(xs, &mut buf)?;
         Ok((w, h, buf))

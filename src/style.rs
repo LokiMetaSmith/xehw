@@ -1,4 +1,4 @@
-use eframe::{egui::*};
+use eframe::egui::*;
 
 const RED: Color32 = Color32::from_rgb(0xCC, 0x3E, 0x28);
 const BLUE: Color32 = Color32::from_rgb(0x1E, 0x6F, 0xCC);
@@ -42,10 +42,9 @@ pub fn tune(ctx: &Context) {
     // style.visuals.widgets.hovered.fg_stroke.color = Color32::RED;
 
     style.visuals.button_frame = false;
-    
+
     style.visuals.extreme_bg_color = Color32::from_rgba_unmultiplied(0x77, 0x77, 0x77, 30);
     style.visuals.widgets.inactive.rounding = Rounding::same(0.0);
     style.visuals.widgets.noninteractive.rounding = Rounding::same(0.0);
     ctx.set_style(style);
 }
-

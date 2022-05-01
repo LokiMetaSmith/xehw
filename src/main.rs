@@ -7,6 +7,6 @@
 fn main() {
     let app = eframe_template::TemplateApp::default();
     let native_options = eframe::NativeOptions::default();
-    native_options.drag_and_drop_support  = true;
+    native_options.drag_and_drop_support = true;
     eframe::run_native(Box::new(app), native_options);
 }
