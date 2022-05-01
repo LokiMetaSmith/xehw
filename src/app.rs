@@ -52,7 +52,7 @@ impl Default for TemplateApp {
             num_cols: 8,
             live_code: String::new(),
             frozen_code: Vec::new(),
-            trial_code: None,
+            trial_code: Some(String::new()),
             last_dt: None,
             debug_token: None,
             canvas: Canvas::new(),
@@ -84,9 +84,31 @@ impl TemplateApp {
 
     fn binary_dropped(&mut self, s: Xbitstr) {
         self.xs.set_binary_input(s).unwrap();
-        if self.snapshot.is_none() {
-            // initial snapshot
-            self.snapshot = Some((self.xs.clone(), self.frozen_code.to_owned()));
+    }
+
+    fn snapshot(&mut self) {
+        self.snapshot = Some((self.xs.clone(), self.frozen_code.to_owned()));
+    }
+
+    fn rollback(&mut self) {
+        let old_state = if self.is_trial() {
+            self.snapshot.clone()
+        } else {
+            self.snapshot.take()
+        };
+        if let Some((xs, frozen)) = old_state {
+            self.xs = xs;
+            self.frozen_code = frozen;
+        }
+    }
+
+    fn hex_offset_str(&self, offset: usize, _end: usize, sep: char) -> String {
+        let a = offset / 8;
+        let b = offset % 8;
+        if b == 0 {
+            format!("{:06x}{}", a, sep)
+        } else {
+            format!("{:06x}.{}{}", a, b, sep)
         }
     }
 
@@ -96,6 +118,8 @@ impl TemplateApp {
         let mut run_clicked = false;
         let mut next_clicked = false;
         let mut rnext_clicked = false;
+        let mut repl_clicked = false;
+        let mut trial_clicked = false;
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -130,42 +154,31 @@ impl TemplateApp {
                     }
                 }
                 
-                ui.horizontal(|ui| {
-                    run_clicked = ui.button("Evaluate").clicked();
-                    let has_log = self.xs.reverse_log.as_ref().map(|l| l.len() > 0).unwrap_or(false);
-                    let rnext_btn = ui.add_enabled(has_log, Button::new("Rnext"));
-                    if has_log {
-                        rnext_clicked = rnext_btn.clicked() || rnext_pressed(ui);
-                    }
-                    let next_btn = ui.add_enabled(self.xs.is_running(), Button::new("Next"));
-                    if self.xs.is_running() {
-                        next_clicked = next_btn.clicked() || next_pressed(ui);
-                    }
-                });
-    
-                snapshot_clicked = ui.button("Snapshot").clicked() || snapshot_pressed(ui);
-                if snapshot_clicked {
+                run_clicked = ui.button("Run").clicked();
+                snapshot_clicked = ui.add_enabled(!self.is_trial(), Button::new("Snapshot")).clicked()
+                 || snapshot_pressed(ui);
+                if snapshot_clicked && !self.is_trial() {
                     let t = Instant::now();
-                    self.snapshot = Some((self.xs.clone(), self.frozen_code.to_owned()));
+                    self.snapshot();
                     self.last_dt = Some(t.elapsed().as_secs_f64());
                 }
-                rollback_clicked = ui.add_enabled(self.snapshot.is_some(), Button::new("Rollback")).clicked()
+                let rollback_enabled = self.snapshot.is_some() && !self.is_trial();
+                rollback_clicked = ui.add_enabled(rollback_enabled, Button::new("Rollback")).clicked()
                     || rollback_pressed(ui);
-                if rollback_clicked {
-                    if let Some((xs_old, frozen)) = self.snapshot.clone() {
-                        self.xs = xs_old;
-                        self.frozen_code = frozen;
-                    }
+                if rollback_clicked && rollback_enabled {
+                    let t = Instant::now();
+                    self.rollback();
+                    self.last_dt = Some(t.elapsed().as_secs_f64());
                 }
-                ui.horizontal(|ui| {
-                    if ui.checkbox(&mut self.rdebug_enabled, "Reverse Debugging").changed() {
-                        if self.rdebug_enabled {
-                            self.xs.start_recording();
-                        } else {
-                            self.xs.stop_recording();
-                        }
-                    }
-                });
+                repl_clicked = ui.radio(self.trial_code.is_none(), "REPL").clicked() ;
+                trial_clicked = ui.radio(self.trial_code.is_some(), "TRIAL").clicked();
+                if ui.checkbox(&mut self.rdebug_enabled, "RRecord").changed() {
+                    self.xs.set_recording_enabled(self.rdebug_enabled);
+                }
+                if self.xs.is_recording() {
+                    rnext_clicked = ui.button("Rnext").clicked() || rnext_pressed(ui);
+                    next_clicked = ui.button("Next").clicked() || next_pressed(ui);
+                }
                 if ui.button("Help (Ctrl+G)").clicked() || help_pressed(ui) {
                     self.help_open = !self.help_open;
                 }
@@ -205,11 +218,12 @@ impl TemplateApp {
             ui.heading("Hotkeys");
             ui.label("Drag and drop binary file to start a new program.");
             add(ui, "Open binary file...", "(Ctrl + O)");
-            add(ui, "Program - Evaluate", "(Ctrl + Enter)");
+            add(ui, "Program - Run", "(Ctrl + Enter)");
             add(ui, "Program - Snapshot", "(Ctrl + Shift + S)");
             add(ui, "Program - Rollback", "(Ctrl + Shift + R)");
             add(ui, "Debugger - Next", "(Alt + Right)");
             add(ui, "Debugger - Reverse Next", "(Alt + Left)");
+            add(ui, "Debugger - Toogle Recording", "(Alt + ?)");
             add(ui, "Canvas - Show", "(Ctrl + Shift + M)");
             add(ui, "Switch to Hex Panel", "(Ctrl + 1)");
             add(ui, "Switch to Code Panel", "(Ctrl + 2)");
@@ -236,18 +250,19 @@ impl TemplateApp {
                 let to = bs.end().min(from + visible_bits as usize);
 
                 ui.set_min_height(size1.y);
-                if bs.len() > 0 {
-                    let header = hex_addr_rich(
-                        format!("{:06x},{}", offset / 8, offset % 8));
-                    ui.add(Label::new(header));
-                }
+                let header = hex_addr_rich(self.hex_offset_str(offset, bs.end(), ' '));
+                ui.add(Label::new(header));
 
-                while from < to {
+                for _ in 0..self.num_rows {
                     let spacing = ui.spacing_mut().clone();
                     ui.spacing_mut().item_spacing.x = 0.0;
                     ui.spacing_mut().item_spacing.y = 0.0;
+                    let addr_text = hex_addr_rich(self.hex_offset_str(from, bs.end(), ':'));
+                    if from >= to {
+                        ui.add(Label::new(addr_text));
+                        continue;
+                    }
                     ui.horizontal(|ui| {
-                        let addr_text = hex_addr_rich(format!("{:06x} ", from / 8));
                         ui.add(Label::new(addr_text));
                         let mut ascii = String::new();
                         ascii.push_str("  ");
@@ -277,7 +292,7 @@ impl TemplateApp {
                 }
                 if bs.len() > 0 {
                     let footer = crate::style::hex_addr_rich(
-                        format!("{:06x},{}", bs.end() / 8, bs.end() % 8));
+                        self.hex_offset_str(bs.end(), bs.len(), ' '));
                     ui.add(Label::new(footer));
                 }
             });
@@ -365,9 +380,20 @@ impl TemplateApp {
                         }
                     }
                 }
-                if let Some(secs) = self.last_dt {
-                    ui.colored_label(COMMENT_FG, format!("{:.4}s", secs));
-                }
+                ui.horizontal(|ui| {
+                    if self.is_trial()  {
+                        if let Some((err, loc)) = self.xs.last_error() {
+                            let errmsg = format!("{}", err);
+                            ui.colored_label(CODE_ERR_BG, errmsg);
+                        }
+                    }
+                    if self.xs.last_error().is_none() {
+                        ui.colored_label(COMMENT_FG, "OK");
+                    }
+                    if let Some(secs) = self.last_dt {
+                        ui.colored_label(COMMENT_FG, format!("{:.4}s", secs));
+                    }
+                });
                 let code = egui::TextEdit::multiline(&mut self.live_code)
                     .desired_rows(1)
                     .desired_width(f32::INFINITY)
@@ -395,34 +421,66 @@ impl TemplateApp {
                     self.move_view(n);
                 }
             }
-
             if let Some(s) = self.xs.stdout() {
                 if !s.is_empty() {
                     self.frozen_code.push(FrozenStr::Log(s.take()));
                 }
             }
-
-            if next_clicked || rnext_clicked {
-                let _res = if next_clicked { self.xs.next() } else { self.xs.rnext() };
-                self.debug_token = self.xs.token_from_current_ip();
-            } else if run_clicked && !self.live_code.trim().is_empty() {
+            if self.is_trial() && repl_clicked {
+                self.rollback();
+                self.trial_code = None;
+                self.setup_focus = true;
+            }
+            if (!self.is_trial() && trial_clicked) || (self.is_trial() && self.snapshot.is_none()) {
                 let t = Instant::now();
-                let xsrc = Xstr::from(self.live_code.trim_end());
-                let res = self.xs.evalxstr(xsrc.clone());
-                self.debug_token = self.xs.token_from_current_ip();
-                for s in xeh::lex::XstrLines::new(xsrc) {
+                self.trial_code = Some(String::new());
+                self.snapshot();
+                self.last_dt = Some(t.elapsed().as_secs_f64());
+                self.setup_focus = true;
+            }
+            let has_some_code = !self.live_code.trim().is_empty();
+            if self.is_trial() {
+                if self.trial_code.as_ref() != Some(&self.live_code) {
+                    self.rollback();
+                    if has_some_code {
+                        self.trial_code = Some(self.live_code.clone());
+                        let _err = self.xs.eval(&self.live_code);
+                    }
+                    self.debug_token = self.xs.location_from_current_ip();
+                }
+            }
+            if next_clicked || rnext_clicked {
+                let t = Instant::now();
+                let _res = if next_clicked { self.xs.next() } else { self.xs.rnext() };
+                self.debug_token = self.xs.location_from_current_ip();
+                self.last_dt = Some(t.elapsed().as_secs_f64());
+            } else if run_clicked && has_some_code {
+                let t = Instant::now();
+                let xsrc = Xstr::from(&self.live_code);
+                for s in xeh::lex::XstrLines::new(xsrc.clone()) {
                     self.frozen_code.push(FrozenStr::Code(s))
                 }
-                self.last_dt = Some(t.elapsed().as_secs_f64());
+                if self.is_trial() {
+                    self.snapshot();
+                } else {
+                    let _ = self.xs.evalxstr(xsrc.clone());
+                    self.debug_token = self.xs.location_from_current_ip();
+                }
                 self.live_code.clear();
+                self.last_dt = Some(t.elapsed().as_secs_f64());
             }
             if next_clicked || rnext_clicked || run_clicked || rollback_clicked  {
+                self.debug_token = self.xs.location_from_current_ip();
                 if let Ok((w, h, buf)) = crate::canvas::copy_rgba(&mut self.xs) {
                     self.canvas.update(ctx, w, h, buf);
                 }
             }
         });
 
+    }
+
+    fn is_trial(&self) -> bool {
+        self.trial_code.is_some()
     }
 }
 
