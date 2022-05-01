@@ -40,11 +40,15 @@ pub fn tune(ctx: &Context) {
     // style.visuals.widgets.active.fg_stroke.color = Color32::RED;
     // style.visuals.widgets.inactive.fg_stroke.color = Color32::RED;
     // style.visuals.widgets.hovered.fg_stroke.color = Color32::RED;
-
+    style.visuals.text_cursor_width = 1.0;
+    style.visuals.selection.bg_fill = BLUE;
     style.visuals.button_frame = false;
-
     style.visuals.extreme_bg_color = Color32::from_rgba_unmultiplied(0x77, 0x77, 0x77, 30);
     style.visuals.widgets.inactive.rounding = Rounding::same(0.0);
     style.visuals.widgets.noninteractive.rounding = Rounding::same(0.0);
+    style.visuals.widgets.noninteractive.bg_stroke.width = 0.0;
+    style.visuals.widgets.active.rounding = Rounding::same(0.0);
+    style.visuals.widgets.hovered.rounding = Rounding::same(0.0);
+    style.visuals.widgets.open.rounding = Rounding::same(0.0);
     ctx.set_style(style);
 }
