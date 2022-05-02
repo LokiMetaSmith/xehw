@@ -21,7 +21,7 @@ pub struct TemplateApp {
     num_rows: isize,
     num_cols: isize,
     live_code: String,
-    trial_code: Option<String>,
+    trial_code: Option<Xstr>,
     frozen_code: Vec<FrozenStr>,
     last_dt: Option<f64>,
     canvas: Canvas,
@@ -52,7 +52,7 @@ impl Default for TemplateApp {
             num_cols: 8,
             live_code: String::new(),
             frozen_code: Vec::new(),
-            trial_code: Some(String::new()),
+            trial_code: Some(Xstr::new()),
             last_dt: None,
             debug_token: None,
             canvas: Canvas::new(),
@@ -306,7 +306,6 @@ impl TemplateApp {
             let v = resp.drag_delta();
             self.move_view(v.y as isize);
 
-            ui.separator();
             ui.label(RichText::new("Data Stack:").color(COMMENT_FG));
 
             egui::containers::ScrollArea::vertical().show(ui, |ui| {
@@ -355,54 +354,16 @@ impl TemplateApp {
                                 );
                             }
                             FrozenStr::Code(s) => {
-                                if let Some((err, loc)) = self.xs.last_error() {
+                                if let Some(loc) = self.xs.last_err_location() {
                                     if Xsubstr::shallow_eq(&loc.whole_line, s) {
-                                        let (a, b, c) = split_highlight(&loc);
-                                        ui.spacing_mut().item_spacing.x = 0.0;
-                                        ui.horizontal_top(|ui| {
-                                            ui.label(RichText::new(a).monospace().color(CODE_FG));
-                                            ui.label(
-                                                RichText::new(b)
-                                                    .monospace()
-                                                    .background_color(CODE_ERR_BG),
-                                            );
-                                            ui.label(RichText::new(c).monospace().color(CODE_FG));
-                                        });
-                                        let n: usize =
-                                            loc.whole_line
-                                                .chars()
-                                                .take(loc.col)
-                                                .map(|c| {
-                                                    if c == '\t' {
-                                                        egui::text::TAB_SIZE
-                                                    } else {
-                                                        1
-                                                    }
-                                                })
-                                                .sum();
-                                        let pos = format!("{:->1$}", '^', n + 1);
-                                        ui.label(RichText::new(pos).monospace().color(CODE_ERR_BG));
-                                        ui.label(
-                                            RichText::new(format!("error: {}", err))
-                                                .monospace()
-                                                .color(CODE_ERR_BG),
-                                        );
+                                        let err = self.xs.last_error().unwrap();
+                                        self.ui_error_highlight(ui, loc, err);
                                         continue;
                                     }
                                 }
-                                if let Some(dbg) = self.debug_token.as_ref() {
-                                    if Xsubstr::shallow_eq(&dbg.whole_line, s) {
-                                        let (a, b, c) = split_highlight(dbg);
-                                        ui.spacing_mut().item_spacing.x = 0.0;
-                                        ui.horizontal_top(|ui| {
-                                            ui.label(RichText::new(a).monospace().color(CODE_FG));
-                                            ui.label(
-                                                RichText::new(b)
-                                                    .monospace()
-                                                    .background_color(CODE_DBG_BG),
-                                            );
-                                            ui.label(RichText::new(c).monospace().color(CODE_FG));
-                                        });
+                                if let Some(loc) = self.debug_token.as_ref() {
+                                    if Xsubstr::shallow_eq(&loc.whole_line, s) {
+                                        self.ui_debugger_highlight(ui, loc);
                                         continue;
                                     }
                                 }
@@ -410,32 +371,28 @@ impl TemplateApp {
                             }
                         }
                     }
-                    ui.horizontal(|ui| {
-                        if self.is_trial() {
-                            if let Some((err, loc)) = self.xs.last_error() {
-                                let errmsg = format!("{}", err);
-                                ui.colored_label(CODE_ERR_BG, errmsg);
-                            }
-                        }
+                    let show_trial_error = self.is_trial() && self.xs.last_error().is_some() && self.live_code.trim().len() > 0;
+                    {
+                        use std::fmt::Write;
+                        let mut s = String::new();
                         if self.xs.last_error().is_none() {
-                            ui.colored_label(COMMENT_FG, "OK");
+                            write!(s, "OK ").unwrap();
+                        } else {
+                            write!(s, "ERROR ").unwrap();
                         }
                         if let Some(secs) = self.last_dt {
-                            ui.colored_label(COMMENT_FG, format!("{:.4}s", secs));
+                            write!(s, "{:.4}s", secs).unwrap();
                         }
-                    });
+                        ui.label(RichText::new(s).color(COMMENT_FG).monospace());
+                    }
                     let code = egui::TextEdit::multiline(&mut self.live_code)
                         .desired_rows(1)
                         .desired_width(f32::INFINITY)
                         .code_editor()
-                        .margin(vec2(0.0, 2.0))
+                        .margin(vec2(1.0, 1.0))
                         .id(Id::new("live"));
                     let res = ui.add(code);
-                    if hotkeys::switch_to_code_pressed(&ctx.input()) {
-                        res.request_focus();
-                        self.setup_focus = false;
-                    }
-                    if self.setup_focus {
+                    if hotkeys::switch_to_code_pressed(&ctx.input()) || self.setup_focus {
                         res.request_focus();
                         self.setup_focus = false;
                     }
@@ -443,8 +400,14 @@ impl TemplateApp {
                     if live_has_focus && run_pressed(ui) {
                         run_clicked = true;
                     }
+                    if show_trial_error {
+                        ui.vertical(|ui| {
+                            self.ui_trial_error(ui);
+                        });
+                    }
                 });
 
+            let has_some_code = !self.live_code.trim().is_empty();
             if !live_has_focus {
                 let n = scroll_view_pressed(ctx, self.num_cols);
                 if n != 0 {
@@ -463,20 +426,25 @@ impl TemplateApp {
             }
             if (!self.is_trial() && trial_clicked) || (self.is_trial() && self.snapshot.is_none()) {
                 let t = Instant::now();
-                self.trial_code = Some(String::new());
+                self.trial_code = Some(Xstr::new());
                 self.snapshot();
                 self.last_dt = Some(t.elapsed().as_secs_f64());
                 self.setup_focus = true;
             }
-            let has_some_code = !self.live_code.trim().is_empty();
+            
             if self.is_trial() {
-                if self.trial_code.as_ref() != Some(&self.live_code) {
+                if self.trial_code.as_ref().map(|s| s.as_str()) != Some(&self.live_code) {
                     self.rollback();
                     if has_some_code {
-                        self.trial_code = Some(self.live_code.clone());
-                        let _err = self.xs.eval(&self.live_code);
+                        let xsrc = Xstr::from(&self.live_code);
+                        self.trial_code = Some(xsrc.clone());
+                        let _res = self.xs.evalxstr(xsrc);
                     }
-                    self.debug_token = self.xs.location_from_current_ip();
+                    self.debug_token = None;
+                }
+                if self.xs.last_error().is_some() {
+                    // prevent from saving errorneous code
+                    run_clicked = false;
                 }
             }
             if next_clicked || rnext_clicked {
@@ -490,14 +458,18 @@ impl TemplateApp {
                 self.last_dt = Some(t.elapsed().as_secs_f64());
             } else if run_clicked && has_some_code {
                 let t = Instant::now();
-                let xsrc = Xstr::from(&self.live_code);
+                let xsrc = if self.is_trial() {
+                    self.trial_code.clone().unwrap()
+                } else {
+                    Xstr::from(&self.live_code)
+                };
                 for s in xeh::lex::XstrLines::new(xsrc.clone()) {
                     self.frozen_code.push(FrozenStr::Code(s))
                 }
                 if self.is_trial() {
                     self.snapshot();
                 } else {
-                    let _ = self.xs.evalxstr(xsrc.clone());
+                    let _ = self.xs.evalxstr(xsrc);
                     self.debug_token = self.xs.location_from_current_ip();
                 }
                 self.live_code.clear();
@@ -515,6 +487,65 @@ impl TemplateApp {
     fn is_trial(&self) -> bool {
         self.trial_code.is_some()
     }
+
+    fn ui_trial_error(&self, ui: &mut Ui) {
+        if let Some(err) = self.xs.last_error() {
+            if let Some(loc) = self.xs.last_err_location() {
+                self.ui_error_highlight(ui, loc, err);
+            } else {
+                let errmsg = format!("{}", err);
+                ui.label(RichText::new(errmsg).color(CODE_ERR_BG).monospace());
+            }
+        }
+    }
+
+    fn ui_error_highlight(&self, ui: &mut Ui, loc: &TokenLocation, err: &Xerr) {
+        let (a, b, c) = split_highlight(loc);
+        ui.spacing_mut().item_spacing.x = 0.0;
+        ui.horizontal_top(|ui| {
+            ui.label(RichText::new(a).monospace().color(CODE_FG));
+            ui.label(
+                RichText::new(b)
+                    .monospace()
+                    .background_color(CODE_ERR_BG),
+            );
+            ui.label(RichText::new(c).monospace().color(CODE_FG));
+        });
+        let n: usize =
+            loc.whole_line
+                .chars()
+                .take(loc.col)
+                .map(|c| {
+                    if c == '\t' {
+                        egui::text::TAB_SIZE
+                    } else {
+                        1
+                    }
+                })
+                .sum();
+        let pos = format!("{:->1$}", '^', n + 1);
+        ui.label(RichText::new(pos).monospace().color(CODE_ERR_BG));
+        ui.label(
+            RichText::new(format!("{}", err))
+                .monospace()
+                .color(CODE_ERR_BG),
+        );
+    }
+
+    fn ui_debugger_highlight(&self, ui: &mut Ui, loc: &TokenLocation) {
+        let (a, b, c) = split_highlight(loc);
+        ui.spacing_mut().item_spacing.x = 0.0;
+        ui.horizontal_top(|ui| {
+            ui.label(RichText::new(a).monospace().color(CODE_FG));
+            ui.label(
+                RichText::new(b)
+                    .monospace()
+                    .background_color(CODE_DBG_BG),
+            );
+            ui.label(RichText::new(c).monospace().color(CODE_FG));
+        });
+    }
+
 }
 
 use std::future::Future;
