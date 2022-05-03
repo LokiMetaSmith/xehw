@@ -537,6 +537,11 @@ impl TemplateApp {
         if let Some(s) = tok {
             start = s.range().start.min(len);
             end = s.range().end.min(len);
+            if start == len && start == end {
+                // select something visible
+                let pos = text.char_indices().rev().find_map(|c| if c.1.is_whitespace() { Some(c.0) } else { None});
+                start = pos.unwrap_or(0);
+            }
         }
         j.sections.push(egui::text::LayoutSection {
             leading_space: 0.0,
