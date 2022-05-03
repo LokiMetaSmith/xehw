@@ -403,8 +403,11 @@ impl TemplateApp {
                             }
                         }
                     }
-                    let show_trial_error = self.is_trial() && self.xs.last_error().is_some() && self.live_code.trim().len() > 0;
-                    { // mini status
+                    let show_trial_error = self.is_trial()
+                        && self.xs.last_error().is_some()
+                        && self.live_code.trim().len() > 0;
+                    {
+                        // mini status
                         use std::fmt::Write;
                         if let Some(err) = self.xs.last_error() {
                             if show_trial_error {
@@ -471,7 +474,7 @@ impl TemplateApp {
                 self.last_dt = Some(t.elapsed().as_secs_f64());
                 self.setup_focus = true;
             }
-            
+
             if self.is_trial() {
                 if self.trial_code.as_ref().map(|s| s.as_str()) != Some(&self.live_code) {
                     self.rollback();
@@ -528,7 +531,12 @@ impl TemplateApp {
         self.trial_code.is_some()
     }
 
-    fn code_layouter(text: &str, tok: Option<&Xsubstr>, font_id: &FontId, wrap_width: f32) -> egui::text::LayoutJob {
+    fn code_layouter(
+        text: &str,
+        tok: Option<&Xsubstr>,
+        font_id: &FontId,
+        wrap_width: f32,
+    ) -> egui::text::LayoutJob {
         let mut j: egui::text::LayoutJob = Default::default();
         j.text = text.to_string();
         let len = text.len();
@@ -539,7 +547,13 @@ impl TemplateApp {
             end = s.range().end.min(len);
             if start == len && start == end {
                 // select something visible
-                let pos = text.char_indices().rev().find_map(|c| if c.1.is_whitespace() { Some(c.0) } else { None});
+                let pos = text.char_indices().rev().find_map(|c| {
+                    if c.1.is_whitespace() {
+                        Some(c.0)
+                    } else {
+                        None
+                    }
+                });
                 start = pos.unwrap_or(0);
             }
         }
@@ -551,7 +565,12 @@ impl TemplateApp {
         j.sections.push(egui::text::LayoutSection {
             leading_space: 0.0,
             byte_range: start..end,
-            format: TextFormat { font_id: font_id.clone(), color: CODE_FG, background: CODE_ERR_BG ,..Default::default()},
+            format: TextFormat {
+                font_id: font_id.clone(),
+                color: CODE_FG,
+                background: CODE_ERR_BG,
+                ..Default::default()
+            },
         });
         j.sections.push(egui::text::LayoutSection {
             leading_space: 0.0,
@@ -567,25 +586,15 @@ impl TemplateApp {
         ui.spacing_mut().item_spacing.x = 0.0;
         ui.horizontal_top(|ui| {
             ui.label(RichText::new(a).monospace().color(CODE_FG));
-            ui.label(
-                RichText::new(b)
-                    .monospace()
-                    .background_color(CODE_ERR_BG),
-            );
+            ui.label(RichText::new(b).monospace().background_color(CODE_ERR_BG));
             ui.label(RichText::new(c).monospace().color(CODE_FG));
         });
-        let n: usize =
-            loc.whole_line
-                .chars()
-                .take(loc.col)
-                .map(|c| {
-                    if c == '\t' {
-                        egui::text::TAB_SIZE
-                    } else {
-                        1
-                    }
-                })
-                .sum();
+        let n: usize = loc
+            .whole_line
+            .chars()
+            .take(loc.col)
+            .map(|c| if c == '\t' { egui::text::TAB_SIZE } else { 1 })
+            .sum();
         let pos = format!("{:->1$}", '^', n + 1);
         ui.label(RichText::new(pos).monospace().color(CODE_ERR_BG));
         ui.label(
@@ -600,15 +609,10 @@ impl TemplateApp {
         ui.spacing_mut().item_spacing.x = 0.0;
         ui.horizontal_top(|ui| {
             ui.label(RichText::new(a).monospace().color(CODE_FG));
-            ui.label(
-                RichText::new(b)
-                    .monospace()
-                    .background_color(CODE_DBG_BG),
-            );
+            ui.label(RichText::new(b).monospace().background_color(CODE_DBG_BG));
             ui.label(RichText::new(c).monospace().color(CODE_FG));
         });
     }
-
 }
 
 use std::future::Future;

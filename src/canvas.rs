@@ -39,18 +39,18 @@ impl Canvas {
         }
         CentralPanel::default().show(ctx, |ui| {
             //ui.with_layer_id(LayerId::background(), |ui| {
-                if let Some(texture) = self.tex.as_ref() {
-                    let sx = self.offs.x;
-                    let sy = self.offs.y;
-                    let zoom = self.zoom;
-                    let size = texture.size_vec2();
-                    let img = Image::new(texture, size);
-                    let rect = Rect {
-                        min: pos2(sx, sy),
-                        max: pos2(sx + size.x * zoom, sy + size.y * zoom),
-                    };
-                    img.paint_at(ui, rect);
-                }
+            if let Some(texture) = self.tex.as_ref() {
+                let sx = self.offs.x;
+                let sy = self.offs.y;
+                let zoom = self.zoom;
+                let size = texture.size_vec2();
+                let img = Image::new(texture, size);
+                let rect = Rect {
+                    min: pos2(sx, sy),
+                    max: pos2(sx + size.x * zoom, sy + size.y * zoom),
+                };
+                img.paint_at(ui, rect);
+            }
             //});
         });
     }
