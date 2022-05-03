@@ -29,6 +29,7 @@ pub struct TemplateApp {
     rdebug_enabled: bool,
     snapshot: Option<(Xstate, Vec<FrozenStr>)>,
     bin_future: Option<Pin<BoxFuture>>,
+    input_binary: Option<Xbitstr>,
     setup_focus: bool,
     bytecode_open: bool,
     help_open: bool,
@@ -58,6 +59,7 @@ impl Default for TemplateApp {
             canvas: Canvas::new(),
             snapshot: None,
             bin_future: None,
+            input_binary: None,
             setup_focus: true,
             rdebug_enabled: false,
             bytecode_open: true,
@@ -87,7 +89,37 @@ impl TemplateApp {
     }
 
     fn binary_dropped(&mut self, s: Xbitstr) {
-        self.xs.set_binary_input(s).unwrap();
+        self.input_binary = Some(s.clone());
+        self.reload_state();
+    }
+
+    fn collect_frozen_code(&self) -> String {
+        self.frozen_code.iter().fold(String::new(), |mut buf, x| {
+            match x {
+                FrozenStr::Code(s) => {
+                    buf.push_str(s);
+                    buf.push_str("\n");
+                }
+                _ => (),
+            }
+            buf
+        })
+    }
+
+    fn reload_state(&mut self) {
+        let buf = self.collect_frozen_code();
+        self.xs = Xstate::boot().unwrap();
+        self.live_code = buf;
+        self.frozen_code.clear();
+        if let Some(bin) = &self.input_binary {
+            let _ = self.xs.set_binary_input(bin.clone());
+        }
+        if self.is_trial() {
+            self.trial_code = Some(Xstr::new());
+            self.snapshot();
+        } else {
+            self.snapshot = None;
+        }
     }
 
     fn snapshot(&mut self) {
