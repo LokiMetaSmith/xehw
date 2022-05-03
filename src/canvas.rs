@@ -5,7 +5,7 @@ pub struct Canvas {
     tex: Option<TextureHandle>,
     zoom: f32,
     offs: Vec2,
-    interactive: bool,
+    pub interactive: bool,
 }
 
 impl Canvas {
@@ -23,9 +23,6 @@ impl Canvas {
     }
 
     pub fn ui(&mut self, ctx: &Context) {
-        if crate::hotkeys::interactive_canvas_pressed(ctx) {
-            self.interactive = !self.interactive;
-        }
         if self.interactive {
             let zd = ctx.input().zoom_delta();
             if (zd - 1.0).abs() > 0.01 {
@@ -41,7 +38,7 @@ impl Canvas {
             self.tex = Some(t);
         }
         CentralPanel::default().show(ctx, |ui| {
-            ui.with_layer_id(LayerId::background(), |ui| {
+            //ui.with_layer_id(LayerId::background(), |ui| {
                 if let Some(texture) = self.tex.as_ref() {
                     let sx = self.offs.x;
                     let sy = self.offs.y;
@@ -54,7 +51,7 @@ impl Canvas {
                     };
                     img.paint_at(ui, rect);
                 }
-            });
+            //});
         });
     }
 

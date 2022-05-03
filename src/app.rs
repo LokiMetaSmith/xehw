@@ -372,38 +372,46 @@ impl TemplateApp {
                         }
                     }
                     let show_trial_error = self.is_trial() && self.xs.last_error().is_some() && self.live_code.trim().len() > 0;
-                    {
+                    { // mini status
                         use std::fmt::Write;
-                        let mut s = String::new();
-                        if self.xs.last_error().is_none() {
-                            write!(s, "OK ").unwrap();
+                        if let Some(err) = self.xs.last_error() {
+                            if show_trial_error {
+                                let s = format!("ERROR: {}", err);
+                                ui.label(RichText::new(s).color(CODE_ERR_BG).monospace());
+                            }
                         } else {
-                            write!(s, "ERROR ").unwrap();
+                            let mut s = String::new();
+                            write!(s, "OK ").unwrap();
+                            if let Some(secs) = self.last_dt {
+                                write!(s, "{:.4}s", secs).unwrap();
+                            }
+                            ui.label(RichText::new(s).color(COMMENT_FG).monospace());
                         }
-                        if let Some(secs) = self.last_dt {
-                            write!(s, "{:.4}s", secs).unwrap();
-                        }
-                        ui.label(RichText::new(s).color(COMMENT_FG).monospace());
                     }
+                    let mut errtok = None;
+                    if show_trial_error {
+                        errtok = self.xs.last_err_location().map(|x| x.token.clone());
+                    }
+                    let mut layouter = |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                        let font_id = TextStyle::Monospace.resolve(ui.style());
+                        let j = Self::code_layouter(text, errtok.as_ref(), &font_id, wrap_width);
+                        ui.fonts().layout_job(j)
+                    };
                     let code = egui::TextEdit::multiline(&mut self.live_code)
                         .desired_rows(1)
                         .desired_width(f32::INFINITY)
                         .code_editor()
                         .margin(vec2(1.0, 1.0))
-                        .id(Id::new("live"));
-                    let res = ui.add(code);
+                        .id(Id::new("live"))
+                        .layouter(&mut layouter);
+                    let code_resp = ui.add(code);
                     if hotkeys::switch_to_code_pressed(&ctx.input()) || self.setup_focus {
-                        res.request_focus();
+                        code_resp.request_focus();
                         self.setup_focus = false;
                     }
-                    live_has_focus = res.has_focus();
+                    live_has_focus = code_resp.has_focus();
                     if live_has_focus && run_pressed(ui) {
                         run_clicked = true;
-                    }
-                    if show_trial_error {
-                        ui.vertical(|ui| {
-                            self.ui_trial_error(ui);
-                        });
                     }
                 });
 
@@ -488,15 +496,33 @@ impl TemplateApp {
         self.trial_code.is_some()
     }
 
-    fn ui_trial_error(&self, ui: &mut Ui) {
-        if let Some(err) = self.xs.last_error() {
-            if let Some(loc) = self.xs.last_err_location() {
-                self.ui_error_highlight(ui, loc, err);
-            } else {
-                let errmsg = format!("{}", err);
-                ui.label(RichText::new(errmsg).color(CODE_ERR_BG).monospace());
-            }
+    fn code_layouter(text: &str, tok: Option<&Xsubstr>, font_id: &FontId, wrap_width: f32) -> egui::text::LayoutJob {
+        let mut j: egui::text::LayoutJob = Default::default();
+        j.text = text.to_string();
+        let len = text.len();
+        let mut start = 0;
+        let mut end = 0;
+        if let Some(s) = tok {
+            start = s.range().start.min(len);
+            end = s.range().end.min(len);
         }
+        j.sections.push(egui::text::LayoutSection {
+            leading_space: 0.0,
+            byte_range: 0..start,
+            format: TextFormat::simple(font_id.clone(), CODE_FG),
+        });
+        j.sections.push(egui::text::LayoutSection {
+            leading_space: 0.0,
+            byte_range: start..end,
+            format: TextFormat { font_id: font_id.clone(), color: CODE_FG, background: CODE_ERR_BG ,..Default::default()},
+        });
+        j.sections.push(egui::text::LayoutSection {
+            leading_space: 0.0,
+            byte_range: end..len,
+            format: TextFormat::simple(font_id.clone(), CODE_FG),
+        });
+        j.wrap_width = wrap_width;
+        j
     }
 
     fn ui_error_highlight(&self, ui: &mut Ui, loc: &TokenLocation, err: &Xerr) {
@@ -598,8 +624,12 @@ impl epi::App for TemplateApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, _frame: &epi::Frame) {
-        self.canvas.ui(ctx);
-        if !self.canvas.interactive() {
+        if crate::hotkeys::interactive_canvas_pressed(ctx) {
+            self.canvas.interactive = !self.canvas.interactive;
+        }
+        if self.canvas.interactive() {
+            self.canvas.ui(ctx);
+        } else {
             self.editor(ctx);
         }
     }
