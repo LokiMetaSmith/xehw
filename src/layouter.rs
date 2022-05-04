@@ -9,7 +9,7 @@ pub fn code_layouter(
     dbg: Option<&Xsubstr>,
     font_id: &egui::FontId,
     wrap_width: f32,
-    res: &mut Vec<(usize,usize,char)>,
+    theme: &Theme,
 ) -> egui::text::LayoutJob {
     let mut j: egui::text::LayoutJob = Default::default();
     j.text = text.to_string();
@@ -22,12 +22,10 @@ pub fn code_layouter(
         err_end = s.range().end.min(len);
         slst.push((err_start, 0));
         slst.push((err_end, 0));
-        res.push((err_start,err_end,'E'));
     }
     if let Some(s) = dbg {
         let dbg_start = s.range().start.min(len);
         let dbg_end = s.range().end.min(len);
-        res.push((dbg_start,dbg_end,'D'));
         let r = err_start..err_end;
         if !(r.contains(&dbg_start) || r.contains(&dbg_end)) {
             slst.push((dbg_start, 1));
@@ -43,29 +41,26 @@ pub fn code_layouter(
         j.sections.push(egui::text::LayoutSection {
             leading_space: 0.0,
             byte_range: start..p1,
-            format: TextFormat::simple(font_id.clone(), CODE_FG),
+            format: TextFormat::simple(font_id.clone(), theme.code_fg),
         });
-        res.push((start,p1,' '));
         let (p2, _) = it.next().unwrap();
         j.sections.push(egui::text::LayoutSection {
             leading_space: 0.0,
             byte_range: p1..p2,
             format: TextFormat {
                 font_id: font_id.clone(),
-                color: CODE_FG,
-                background: if dbg==1 { CODE_DBG_BG } else { CODE_ERR_BG },
+                color: theme.code_fg,
+                background: if dbg==1 { theme.debug_bg } else { theme.error_bg },
                 ..Default::default()
             },
         });
-        res.push((p1,p2,if dbg==1 { 'd' } else { 'e' }));
         start = p2;
     }
     j.sections.push(egui::text::LayoutSection {
         leading_space: 0.0,
         byte_range: start..len,
-        format: TextFormat::simple(font_id.clone(), CODE_FG),
+        format: TextFormat::simple(font_id.clone(), theme.code_fg),
     });
-    res.push((start,len,' '));
     j.wrap_width = wrap_width;
     j
 }

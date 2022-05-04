@@ -33,6 +33,7 @@ pub struct TemplateApp {
     setup_focus: bool,
     bytecode_open: bool,
     help_open: bool,
+    theme: Theme,
 }
 
 #[derive(Clone)]
@@ -64,6 +65,7 @@ impl Default for TemplateApp {
             rdebug_enabled: false,
             bytecode_open: true,
             help_open: false,
+            theme: Theme::default(),
         }
     }
 }
@@ -148,6 +150,10 @@ impl TemplateApp {
         }
     }
 
+    fn menu_text(&self, name: &str) -> RichText {
+        RichText::new(name).monospace().color(self.theme.text)
+    }
+
     fn editor(&mut self, ctx: &egui::Context) {
         let mut snapshot_clicked = false;
         let mut rollback_clicked = false;
@@ -159,7 +165,7 @@ impl TemplateApp {
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                if ui.button("Open...").clicked() {
+                if ui.button(self.menu_text("Open...")).clicked() {
                     self.bin_future = Some(Box::pin(async {
                         let res = rfd::AsyncFileDialog::new().pick_file().await;
                         if let Some(file) = res {
@@ -188,9 +194,9 @@ impl TemplateApp {
                     }
                 }
 
-                run_clicked = ui.button("Run").clicked();
+                run_clicked = ui.button(self.menu_text("Run")).clicked();
                 snapshot_clicked = ui
-                    .add_enabled(!self.is_trial(), Button::new("Snapshot"))
+                    .add_enabled(!self.is_trial(), Button::new(self.menu_text("Snapshot")))
                     .clicked()
                     || snapshot_pressed(ui);
                 if snapshot_clicked && !self.is_trial() {
@@ -200,7 +206,7 @@ impl TemplateApp {
                 }
                 let rollback_enabled = self.snapshot.is_some() && !self.is_trial();
                 rollback_clicked = ui
-                    .add_enabled(rollback_enabled, Button::new("Rollback"))
+                    .add_enabled(rollback_enabled, Button::new(self.menu_text("Rollback")))
                     .clicked()
                     || rollback_pressed(ui);
                 if rollback_clicked && rollback_enabled {
@@ -208,8 +214,8 @@ impl TemplateApp {
                     self.rollback();
                     self.last_dt = Some(t.elapsed().as_secs_f64());
                 }
-                repl_clicked = ui.radio(self.trial_code.is_none(), "REPL").clicked();
-                trial_clicked = ui.radio(self.trial_code.is_some(), "TRIAL").clicked();
+                repl_clicked = ui.radio(self.trial_code.is_none(), self.menu_text("REPL")).clicked();
+                trial_clicked = ui.radio(self.trial_code.is_some(), self.menu_text("TRIAL")).clicked();
                 if recording_pressed(ui) {
                     self.rdebug_enabled = !self.rdebug_enabled;
                 }
@@ -217,11 +223,11 @@ impl TemplateApp {
                 self.xs.set_recording_enabled(self.rdebug_enabled);
                 if self.xs.is_recording() {
                     let rnext_enabled = self.rlog_size().map(|n| n > 0).unwrap_or(false);
-                    rnext_clicked = ui.add_enabled(rnext_enabled, Button::new("Rnext")).clicked() || rnext_pressed(ui);
-                    next_clicked = ui.add_enabled(self.xs.is_running(), Button::new("Next")).clicked()
+                    rnext_clicked = ui.add_enabled(rnext_enabled, Button::new(self.menu_text("Rnext"))).clicked() || rnext_pressed(ui);
+                    next_clicked = ui.add_enabled(self.xs.is_running(), Button::new(self.menu_text("Next"))).clicked()
                         || next_pressed(ui);
                 }
-                if ui.button("Help (Ctrl+G)").clicked() || help_pressed(ui) {
+                if ui.button(self.menu_text("Help (Ctrl+G)")).clicked() || help_pressed(ui) {
                     self.help_open = !self.help_open;
                 }
             });
@@ -237,9 +243,9 @@ impl TemplateApp {
             ui.vertical(|ui| {
                 for (ip, op) in self.xs.bytecode().iter().enumerate() {
                     let optext = self.xs.fmt_opcode(ip, op);
-                    let mut rich = RichText::new(format!("{:05x}: {}", ip, optext)).monospace().color(TEXT_FG);
+                    let mut rich = RichText::new(format!("{:05x}: {}", ip, optext)).monospace().color(self.theme.text);
                     if ip == self.xs.ip() {
-                        rich = rich.background_color(TEXT_HIGLIGHT);
+                        rich = rich.background_color(self.theme.code_highlight);
                     }
                     ui.label(rich);
                 }
@@ -253,8 +259,8 @@ impl TemplateApp {
             .show(ctx, |ui| {
                 let add = |ui: &mut Ui, text, combo| {
                     ui.horizontal(|ui| {
-                        ui.label(text);
-                        ui.label(RichText::new(combo).color(GREEN));
+                        ui.colored_label(self.theme.text, text);
+                        ui.colored_label(self.theme.debug_bg, combo);
                     });
                 };
                 ui.heading("Hotkeys");
@@ -291,50 +297,49 @@ impl TemplateApp {
                 let to = bs.end().min(from + visible_bits as usize);
 
                 ui.set_min_height(size1.y);
-                let header = hex_addr_rich(self.hex_offset_str(offset, bs.end(), ' '));
-                ui.add(Label::new(header));
+                let header = self.hex_offset_str(offset, bs.end(), ' ');
+                ui.colored_label(self.theme.comment_fg, header);
 
                 for _ in 0..self.num_rows {
                     let spacing = ui.spacing_mut().clone();
                     ui.spacing_mut().item_spacing.x = 0.0;
                     ui.spacing_mut().item_spacing.y = 0.0;
-                    let addr_text = hex_addr_rich(self.hex_offset_str(from, bs.end(), ':'));
+                    let addr_text = self.hex_offset_str(from, bs.end(), ':');
                     if from >= to {
-                        ui.add(Label::new(addr_text));
+                        ui.colored_label(self.theme.comment_fg, addr_text);
                         continue;
                     }
                     ui.horizontal(|ui| {
-                        ui.add(Label::new(addr_text));
+                        ui.colored_label(self.theme.comment_fg, addr_text);
                         let mut ascii = String::new();
                         ascii.push_str("  ");
                         for i in 0..self.num_cols {
                             if let Some((val, n)) = it.next() {
-                                let hex_data =
-                                    hex_data_rich(format!(" {:02x}", val), from < offset);
+                                let hex_data = RichText::new(format!(" {:02x}", val))
+                                    .color(self.theme.text)
+                                    .background_color(if from < offset { self.theme.code_highlight } else { Color32::TRANSPARENT});
                                 ui.label(hex_data);
                                 let c = xeh::bitstr_ext::byte_to_dump_char(val);
                                 ascii.push(c);
                                 from += n as usize;
                             } else {
                                 let n = (self.num_cols - i) as usize;
-                                let mut s = String::with_capacity(n * 3);
+                                let mut pad = String::with_capacity(n * 3);
                                 for _ in 0..n {
-                                    s.push_str("   ");
+                                    pad.push_str("   ");
                                     ascii.push(' ');
                                 }
-                                let spaces = crate::style::hex_data_rich(s, false);
-                                ui.add(Label::new(spaces));
+                                ui.colored_label(self.theme.text, pad);
                                 break;
                             }
                         }
-                        ui.add(Label::new(crate::style::hex_addr_rich(ascii)));
+                        ui.colored_label(self.theme.text, ascii);
                     });
                     *ui.spacing_mut() = spacing;
                 }
                 if bs.len() > 0 {
-                    let footer =
-                        crate::style::hex_addr_rich(self.hex_offset_str(bs.end(), bs.len(), ' '));
-                    ui.add(Label::new(footer));
+                    let footer = self.hex_offset_str(bs.end(), bs.len(), ' ');
+                    ui.colored_label(self.theme.comment_fg, footer);
                 }
             });
 
@@ -342,7 +347,7 @@ impl TemplateApp {
             let v = resp.drag_delta();
             self.move_view(v.y as isize);
 
-            ui.label(RichText::new("Data Stack:").color(COMMENT_FG));
+            ui.colored_label(self.theme.comment_fg, "Data Stack:");
 
             egui::containers::ScrollArea::vertical().show(ui, |ui| {
                 ui.set_min_width(size1.x);
@@ -354,17 +359,9 @@ impl TemplateApp {
                             s.truncate(ncols as usize - 3);
                             s.push_str("...");
                         }
-                        let mut val = egui::RichText::new(s).monospace();
-                        if i >= self.xs.data_depth() {
-                            val = val.background_color(Color32::DARK_GRAY);
-                        }
                         ui.horizontal(|ui| {
-                            ui.label(
-                                RichText::new(format!("{:4}:", i))
-                                    .monospace()
-                                    .color(COMMENT_FG),
-                            );
-                            ui.label(val);
+                            ui.colored_label(self.theme.comment_fg, format!("{:6}:", i));
+                            ui.colored_label(self.theme.text, s);
                         });
                     } else {
                         break;
@@ -385,9 +382,7 @@ impl TemplateApp {
                     for x in self.frozen_code.iter() {
                         match x {
                             FrozenStr::Log(s) => {
-                                ui.label(
-                                    RichText::new(s.to_string()).monospace().color(COMMENT_FG),
-                                );
+                                ui.colored_label(self.theme.comment_fg, s.to_string());
                             }
                             FrozenStr::Code(s) => {
                                 if let Some(loc) = self.xs.last_err_location() {
@@ -403,7 +398,7 @@ impl TemplateApp {
                                         continue;
                                     }
                                 }
-                                ui.label(RichText::new(s.to_string()).monospace().color(CODE_FG));
+                                ui.colored_label(self.theme.code_fg, s.to_string());
                             }
                         }
                     }
@@ -416,7 +411,7 @@ impl TemplateApp {
                         if let Some(err) = self.xs.last_error() {
                             if show_trial_error {
                                 let s = format!("ERROR: {}", err);
-                                ui.label(RichText::new(s).color(CODE_ERR_BG).monospace());
+                                ui.colored_label(self.theme.error_bg, s);
                             }
                         } else {
                             let mut s = String::new();
@@ -427,7 +422,7 @@ impl TemplateApp {
                             if let Some(n) = self.rlog_size() {
                                 write!(s, " RLOG {}", n).unwrap();
                             }
-                            ui.label(RichText::new(s).color(COMMENT_FG).monospace());
+                            ui.colored_label(self.theme.comment_fg, s);
                         }
                     }
                     let mut errtok = None;
@@ -447,18 +442,18 @@ impl TemplateApp {
                             _ => (),
                         }
                     }
-                    let mut ldbg = Vec::new();
                     let mut layouter = |ui: &egui::Ui, text: &str, wrap_width: f32| {
                         let font_id = TextStyle::Monospace.resolve(ui.style());
-                        let j = crate::layouter::code_layouter(text, errtok.as_ref(), dbgtok.as_ref(), &font_id, wrap_width, &mut ldbg);
+                        let j = crate::layouter::code_layouter(text, errtok.as_ref(), dbgtok.as_ref(), &font_id, wrap_width, &self.theme.clone());
                         ui.fonts().layout_job(j)
                     };
+                    let code_id = Id::new("live");
                     let code = egui::TextEdit::multiline(&mut self.live_code)
                         .desired_rows(1)
                         .desired_width(f32::INFINITY)
                         .code_editor()
                         .margin(vec2(1.0, 1.0))
-                        .id(Id::new("live"))
+                        .id(code_id)
                         .layouter(&mut layouter);
                     let code_resp = ui.add(code);
                     if hotkeys::switch_to_code_pressed(&ctx.input()) || self.setup_focus {
@@ -563,9 +558,9 @@ impl TemplateApp {
         let (a, b, c) = split_highlight(loc);
         ui.spacing_mut().item_spacing.x = 0.0;
         ui.horizontal_top(|ui| {
-            ui.label(RichText::new(a).monospace().color(CODE_FG));
-            ui.label(RichText::new(b).monospace().background_color(CODE_ERR_BG));
-            ui.label(RichText::new(c).monospace().color(CODE_FG));
+            ui.label(RichText::new(a).monospace().color(self.theme.code_fg));
+            ui.label(RichText::new(b).monospace().background_color(self.theme.error_bg));
+            ui.label(RichText::new(c).monospace().color(self.theme.code_fg));
         });
         let n: usize = loc
             .whole_line
@@ -574,21 +569,17 @@ impl TemplateApp {
             .map(|c| if c == '\t' { egui::text::TAB_SIZE } else { 1 })
             .sum();
         let pos = format!("{:->1$}", '^', n + 1);
-        ui.label(RichText::new(pos).monospace().color(CODE_ERR_BG));
-        ui.label(
-            RichText::new(format!("{}", err))
-                .monospace()
-                .color(CODE_ERR_BG),
-        );
+        ui.colored_label(self.theme.error_bg, pos);
+        ui.colored_label(self.theme.error_bg, format!("{}", err));
     }
 
     fn ui_debugger_highlight(&self, ui: &mut Ui, loc: &TokenLocation) {
         let (a, b, c) = split_highlight(loc);
         ui.spacing_mut().item_spacing.x = 0.0;
         ui.horizontal_top(|ui| {
-            ui.label(RichText::new(a).monospace().color(CODE_FG));
-            ui.label(RichText::new(b).monospace().background_color(CODE_DBG_BG));
-            ui.label(RichText::new(c).monospace().color(CODE_FG));
+            ui.label(RichText::new(a).monospace().color(self.theme.code_fg));
+            ui.label(RichText::new(b).monospace().background_color(self.theme.debug_bg));
+            ui.label(RichText::new(c).monospace().color(self.theme.code_fg));
         });
     }
 }
@@ -630,7 +621,7 @@ impl epi::App for TemplateApp {
         if let Some(storage) = _storage {
             *self = epi::get_value(storage, epi::APP_KEY).unwrap_or_default()
         }
-        crate::style::tune(ctx);
+        crate::style::tune(ctx, &self.theme);
     }
 
     /// Called by the frame work to save state before shutdown.
