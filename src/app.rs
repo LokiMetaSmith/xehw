@@ -216,8 +216,10 @@ impl TemplateApp {
                 ui.checkbox(&mut self.rdebug_enabled, "RRecord");
                 self.xs.set_recording_enabled(self.rdebug_enabled);
                 if self.xs.is_recording() {
-                    rnext_clicked = ui.button("Rnext").clicked() || rnext_pressed(ui);
-                    next_clicked = ui.button("Next").clicked() || next_pressed(ui);
+                    let rnext_enabled = self.rlog_size().map(|n| n > 0).unwrap_or(false);
+                    rnext_clicked = ui.add_enabled(rnext_enabled, Button::new("Rnext")).clicked() || rnext_pressed(ui);
+                    next_clicked = ui.add_enabled(self.xs.is_running(), Button::new("Next")).clicked()
+                        || next_pressed(ui);
                 }
                 if ui.button("Help (Ctrl+G)").clicked() || help_pressed(ui) {
                     self.help_open = !self.help_open;
@@ -422,8 +424,8 @@ impl TemplateApp {
                             if let Some(secs) = self.last_dt {
                                 write!(s, "{:.3}s", secs).unwrap();
                             }
-                            if let Some(rrlog) = &self.xs.reverse_log {
-                                write!(s, " RRLOG {}", rrlog.len()).unwrap();
+                            if let Some(n) = self.rlog_size() {
+                                write!(s, " RLOG {}", n).unwrap();
                             }
                             ui.label(RichText::new(s).color(COMMENT_FG).monospace());
                         }
@@ -551,6 +553,10 @@ impl TemplateApp {
 
     fn is_trial(&self) -> bool {
         self.trial_code.is_some()
+    }
+
+    fn rlog_size(&self) -> Option<usize> {
+        self.xs.reverse_log.as_ref().map(|rlog|rlog.len())
     }
 
     fn ui_error_highlight(&self, ui: &mut Ui, loc: &TokenLocation, err: &Xerr) {
