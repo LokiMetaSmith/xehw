@@ -1,7 +1,7 @@
 use eframe::{egui, egui::*};
 
 pub fn interactive_canvas_pressed(ctx: &egui::Context) -> bool {
-    ctx.input().modifiers.ctrl && ctx.input().modifiers.shift && ctx.input().key_pressed(Key::M)
+    ctx.input().modifiers.ctrl && ctx.input().key_pressed(Key::M)
 }
 
 pub fn scroll_view_pressed(ctx: &egui::Context, page_size: isize) -> isize {
@@ -18,12 +18,16 @@ pub fn scroll_view_pressed(ctx: &egui::Context, page_size: isize) -> isize {
     }
 }
 
+pub fn recording_pressed(ui: &Ui) -> bool {
+    ui.input().modifiers.ctrl && ui.input().key_pressed(egui::Key::Y)
+}
+
 pub fn snapshot_pressed(ui: &Ui) -> bool {
-    ui.input().modifiers.ctrl && ui.input().modifiers.shift && ui.input().key_pressed(egui::Key::S)
+    ui.input().modifiers.ctrl && ui.input().key_pressed(egui::Key::S)
 }
 
 pub fn rollback_pressed(ui: &Ui) -> bool {
-    ui.input().modifiers.ctrl && ui.input().modifiers.shift && ui.input().key_pressed(egui::Key::R)
+    ui.input().modifiers.ctrl && ui.input().key_pressed(egui::Key::L)
 }
 
 pub fn help_pressed(ui: &Ui) -> bool {
@@ -31,11 +35,11 @@ pub fn help_pressed(ui: &Ui) -> bool {
 }
 
 pub fn next_pressed(ui: &Ui) -> bool {
-    ui.input().modifiers.alt && ui.input().key_pressed(egui::Key::ArrowRight)
+    ui.input().modifiers.ctrl && ui.input().key_pressed(egui::Key::N)
 }
 
 pub fn rnext_pressed(ui: &Ui) -> bool {
-    ui.input().modifiers.alt && ui.input().key_pressed(egui::Key::ArrowLeft)
+    ui.input().modifiers.ctrl && ui.input().key_pressed(egui::Key::B)
 }
 
 pub fn run_pressed(ui: &Ui) -> bool {

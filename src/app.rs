@@ -210,6 +210,9 @@ impl TemplateApp {
                 }
                 repl_clicked = ui.radio(self.trial_code.is_none(), "REPL").clicked();
                 trial_clicked = ui.radio(self.trial_code.is_some(), "TRIAL").clicked();
+                if recording_pressed(ui) {
+                    self.rdebug_enabled = !self.rdebug_enabled;
+                }
                 ui.checkbox(&mut self.rdebug_enabled, "RRecord");
                 self.xs.set_recording_enabled(self.rdebug_enabled);
                 if self.xs.is_recording() {
@@ -255,13 +258,13 @@ impl TemplateApp {
                 ui.heading("Hotkeys");
                 ui.label("Drag and drop binary file to start a new program.");
                 add(ui, "Open binary file...", "(Ctrl + O)");
-                add(ui, "Program - Run", "(Ctrl + Enter)");
-                add(ui, "Program - Snapshot", "(Ctrl + Shift + S)");
-                add(ui, "Program - Rollback", "(Ctrl + Shift + R)");
-                add(ui, "Debugger - Next", "(Alt + Right)");
-                add(ui, "Debugger - Reverse Next", "(Alt + Left)");
-                add(ui, "Debugger - Toogle Recording", "(Alt + ?)");
-                add(ui, "Canvas - Show", "(Ctrl + Shift + M)");
+                add(ui, "Program - Run", "(Ctrl + R)");
+                add(ui, "Program - Snapshot", "(Ctrl + S)");
+                add(ui, "Program - Rollback", "(Ctrl + L)");
+                add(ui, "Debugger - Next", "(Ctrl + B)");
+                add(ui, "Debugger - Reverse Next", "(Ctrl + N)");
+                add(ui, "Debugger - Toggle Recording", "(Ctrl + Y)");
+                add(ui, "Canvas - Toggle Show", "(Ctrl + M)");
                 add(ui, "Switch to Hex Panel", "(Ctrl + 1)");
                 add(ui, "Switch to Code Panel", "(Ctrl + 2)");
                 add(ui, "Help - Show", "(Ctrl + G)");
