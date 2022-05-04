@@ -210,9 +210,8 @@ impl TemplateApp {
                 }
                 repl_clicked = ui.radio(self.trial_code.is_none(), "REPL").clicked();
                 trial_clicked = ui.radio(self.trial_code.is_some(), "TRIAL").clicked();
-                if ui.checkbox(&mut self.rdebug_enabled, "RRecord").changed() {
-                    self.xs.set_recording_enabled(self.rdebug_enabled);
-                }
+                ui.checkbox(&mut self.rdebug_enabled, "RRecord");
+                self.xs.set_recording_enabled(self.rdebug_enabled);
                 if self.xs.is_recording() {
                     rnext_clicked = ui.button("Rnext").clicked() || rnext_pressed(ui);
                     next_clicked = ui.button("Next").clicked() || next_pressed(ui);
@@ -223,24 +222,24 @@ impl TemplateApp {
             });
         });
 
-        // egui::Window::new("Bytecode")
-        // .open(&mut self.bytecode_open)
-        // .default_pos(pos2(200.0, 400.0))
-        // .vscroll(true)
-        // .show(ctx, |ui| {
-        //     //ctx.style_ui(ui);
-        //     ui.label(format!("ip={}", self.xs.ip()));
-        //     ui.vertical(|ui| {
-        //         for (ip, op) in self.xs.bytecode().iter().enumerate() {
-        //             let optext = self.xs.fmt_opcode(ip, op);
-        //             let mut rich = RichText::new(format!("{:05x}: {}", ip, optext)).monospace().color(TEXT_FG);
-        //             if ip == self.xs.ip() {
-        //                 rich = rich.background_color(TEXT_HIGLIGHT);
-        //             }
-        //             ui.label(rich);
-        //         }
-        //     });
-        // });
+        egui::Window::new("Bytecode")
+        .open(&mut self.bytecode_open)
+        .default_pos(pos2(200.0, 400.0))
+        .vscroll(true)
+        .show(ctx, |ui| {
+            //ctx.style_ui(ui);
+            ui.label(format!("ip={}", self.xs.ip()));
+            ui.vertical(|ui| {
+                for (ip, op) in self.xs.bytecode().iter().enumerate() {
+                    let optext = self.xs.fmt_opcode(ip, op);
+                    let mut rich = RichText::new(format!("{:05x}: {}", ip, optext)).monospace().color(TEXT_FG);
+                    if ip == self.xs.ip() {
+                        rich = rich.background_color(TEXT_HIGLIGHT);
+                    }
+                    ui.label(rich);
+                }
+            });
+        });
 
         egui::Window::new("Help")
             .open(&mut self.help_open)
@@ -418,18 +417,35 @@ impl TemplateApp {
                             let mut s = String::new();
                             write!(s, "OK ").unwrap();
                             if let Some(secs) = self.last_dt {
-                                write!(s, "{:.4}s", secs).unwrap();
+                                write!(s, "{:.3}s", secs).unwrap();
+                            }
+                            if let Some(rrlog) = &self.xs.reverse_log {
+                                write!(s, " RRLOG {}", rrlog.len()).unwrap();
                             }
                             ui.label(RichText::new(s).color(COMMENT_FG).monospace());
                         }
                     }
                     let mut errtok = None;
+                    let mut dbgtok = None;
                     if show_trial_error {
-                        errtok = self.xs.last_err_location().map(|x| x.token.clone());
+                        match (self.xs.last_err_location(), &self.trial_code) {
+                            (Some(loc),Some(code)) if loc.token.parent() == code =>
+                                errtok = Some(loc.token.clone()),
+                            _ => (),
+                        }
                     }
+                    if self.is_trial() {
+                        match (&self.debug_token, &self.trial_code) {
+                            (Some(loc),Some(code)) if loc.token.parent() == code  => {
+                                dbgtok = Some(loc.token.clone());
+                            }
+                            _ => (),
+                        }
+                    }
+                    let mut ldbg = Vec::new();
                     let mut layouter = |ui: &egui::Ui, text: &str, wrap_width: f32| {
                         let font_id = TextStyle::Monospace.resolve(ui.style());
-                        let j = Self::code_layouter(text, errtok.as_ref(), &font_id, wrap_width);
+                        let j = crate::layouter::code_layouter(text, errtok.as_ref(), dbgtok.as_ref(), &font_id, wrap_width, &mut ldbg);
                         ui.fonts().layout_job(j)
                     };
                     let code = egui::TextEdit::multiline(&mut self.live_code)
@@ -478,12 +494,15 @@ impl TemplateApp {
             if self.is_trial() {
                 if self.trial_code.as_ref().map(|s| s.as_str()) != Some(&self.live_code) {
                     self.rollback();
+                    self.xs.set_recording_enabled(self.rdebug_enabled);
+                    let t = Instant::now();
+                    let xsrc = Xstr::from(&self.live_code);
+                    self.trial_code = Some(xsrc.clone());
                     if has_some_code {
-                        let xsrc = Xstr::from(&self.live_code);
-                        self.trial_code = Some(xsrc.clone());
                         let _res = self.xs.evalxstr(xsrc);
                     }
-                    self.debug_token = None;
+                    self.debug_token = self.xs.location_from_current_ip();
+                    self.last_dt = Some(t.elapsed().as_secs_f64());
                 }
                 if self.xs.last_error().is_some() {
                     // prevent from saving errorneous code
@@ -529,56 +548,6 @@ impl TemplateApp {
 
     fn is_trial(&self) -> bool {
         self.trial_code.is_some()
-    }
-
-    fn code_layouter(
-        text: &str,
-        tok: Option<&Xsubstr>,
-        font_id: &FontId,
-        wrap_width: f32,
-    ) -> egui::text::LayoutJob {
-        let mut j: egui::text::LayoutJob = Default::default();
-        j.text = text.to_string();
-        let len = text.len();
-        let mut start = 0;
-        let mut end = 0;
-        if let Some(s) = tok {
-            start = s.range().start.min(len);
-            end = s.range().end.min(len);
-            if start == len && start == end {
-                // select something visible
-                let pos = text.char_indices().rev().find_map(|c| {
-                    if c.1.is_whitespace() {
-                        Some(c.0)
-                    } else {
-                        None
-                    }
-                });
-                start = pos.unwrap_or(0);
-            }
-        }
-        j.sections.push(egui::text::LayoutSection {
-            leading_space: 0.0,
-            byte_range: 0..start,
-            format: TextFormat::simple(font_id.clone(), CODE_FG),
-        });
-        j.sections.push(egui::text::LayoutSection {
-            leading_space: 0.0,
-            byte_range: start..end,
-            format: TextFormat {
-                font_id: font_id.clone(),
-                color: CODE_FG,
-                background: CODE_ERR_BG,
-                ..Default::default()
-            },
-        });
-        j.sections.push(egui::text::LayoutSection {
-            leading_space: 0.0,
-            byte_range: end..len,
-            format: TextFormat::simple(font_id.clone(), CODE_FG),
-        });
-        j.wrap_width = wrap_width;
-        j
     }
 
     fn ui_error_highlight(&self, ui: &mut Ui, loc: &TokenLocation, err: &Xerr) {
