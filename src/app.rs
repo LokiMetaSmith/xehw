@@ -62,7 +62,7 @@ impl Default for TemplateApp {
             input_binary: None,
             setup_focus: true,
             rdebug_enabled: false,
-            bytecode_open: true,
+            bytecode_open: false,
             help_open: false,
             theme: Theme::default(),
             theme_editor: false,
@@ -280,7 +280,6 @@ impl TemplateApp {
                     });
                 };
                 ui.heading("Hotkeys");
-                ui.label("Drag and drop binary file to start a new program.");
                 add(ui, "Open binary file...", "(Ctrl + O)");
                 add(ui, "Program - Run", "(Ctrl + R)");
                 add(ui, "Program - Snapshot", "(Ctrl + S)");
@@ -292,6 +291,8 @@ impl TemplateApp {
                 add(ui, "Switch to Hex Panel", "(Ctrl + 1)");
                 add(ui, "Switch to Code Panel", "(Ctrl + 2)");
                 add(ui, "Help - Show", "(Ctrl + G)");
+                ui.heading("Mouse");
+                ui.colored_label(self.theme.text, "Open new binary with Drag and Drop");
             });
 
         let hex_panel = egui::SidePanel::left("left_panel").show(ctx, |ui| {
