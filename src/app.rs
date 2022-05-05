@@ -12,9 +12,7 @@ type Instant = instant::Instant;
 type Instant = std::time::Instant;
 
 type BoxFuture = Box<dyn Future<Output = Vec<u8>>>;
-/// We derive Deserialize/Serialize so we can persist app state on shutdown.
-#[cfg_attr(feature = "persistence", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(feature = "persistence", serde(default))] // if we add new fields, give them default values when deserializing old state
+
 pub struct TemplateApp {
     xs: Xstate,
     start_row: isize,
@@ -34,6 +32,7 @@ pub struct TemplateApp {
     bytecode_open: bool,
     help_open: bool,
     theme: Theme,
+    theme_editor: bool,
 }
 
 #[derive(Clone)]
@@ -66,6 +65,7 @@ impl Default for TemplateApp {
             bytecode_open: true,
             help_open: false,
             theme: Theme::default(),
+            theme_editor: false,
         }
     }
 }
@@ -239,8 +239,13 @@ impl TemplateApp {
                 if ui.button(self.menu_text("Help (Ctrl+G)")).clicked() || help_pressed(ui) {
                     self.help_open = !self.help_open;
                 }
+                if ui.button(self.menu_text("Theme")).clicked() {
+                    self.theme_editor = !self.theme_editor;
+                }
             });
         });
+
+        self.theme.theme_ui(ctx, &mut self.theme_editor);
 
         egui::Window::new("Bytecode")
             .open(&mut self.bytecode_open)
@@ -256,7 +261,7 @@ impl TemplateApp {
                             .monospace()
                             .color(self.theme.text);
                         if ip == self.xs.ip() {
-                            rich = rich.background_color(self.theme.code_highlight);
+                            rich = rich.background_color(self.theme.highlight);
                         }
                         ui.label(rich);
                     }
@@ -271,7 +276,7 @@ impl TemplateApp {
                 let add = |ui: &mut Ui, text, combo| {
                     ui.horizontal(|ui| {
                         ui.colored_label(self.theme.text, text);
-                        ui.colored_label(self.theme.debug_bg, combo);
+                        ui.colored_label(self.theme.debug_marker, combo);
                     });
                 };
                 ui.heading("Hotkeys");
@@ -309,7 +314,7 @@ impl TemplateApp {
 
                 ui.set_min_height(size1.y);
                 let header = self.hex_offset_str(offset, bs.end(), ' ');
-                ui.colored_label(self.theme.comment_fg, header);
+                ui.colored_label(self.theme.comment, header);
 
                 for _ in 0..self.num_rows {
                     let spacing = ui.spacing_mut().clone();
@@ -317,11 +322,11 @@ impl TemplateApp {
                     ui.spacing_mut().item_spacing.y = 0.0;
                     let addr_text = self.hex_offset_str(from, bs.end(), ':');
                     if from >= to {
-                        ui.colored_label(self.theme.comment_fg, addr_text);
+                        ui.colored_label(self.theme.comment, addr_text);
                         continue;
                     }
                     ui.horizontal(|ui| {
-                        ui.colored_label(self.theme.comment_fg, addr_text);
+                        ui.colored_label(self.theme.comment, addr_text);
                         let mut ascii = String::new();
                         ascii.push_str("  ");
                         for i in 0..self.num_cols {
@@ -329,7 +334,7 @@ impl TemplateApp {
                                 let hex_data = RichText::new(format!(" {:02x}", val))
                                     .color(self.theme.text)
                                     .background_color(if from < offset {
-                                        self.theme.code_highlight
+                                        self.theme.highlight
                                     } else {
                                         Color32::TRANSPARENT
                                     });
@@ -354,7 +359,7 @@ impl TemplateApp {
                 }
                 if bs.len() > 0 {
                     let footer = self.hex_offset_str(bs.end(), bs.len(), ' ');
-                    ui.colored_label(self.theme.comment_fg, footer);
+                    ui.colored_label(self.theme.comment, footer);
                 }
             });
 
@@ -362,7 +367,7 @@ impl TemplateApp {
             let v = resp.drag_delta();
             self.move_view(v.y as isize);
 
-            ui.colored_label(self.theme.comment_fg, "Data Stack:");
+            ui.colored_label(self.theme.comment, "Data Stack:");
 
             egui::containers::ScrollArea::vertical().show(ui, |ui| {
                 ui.set_min_width(size1.x);
@@ -375,7 +380,7 @@ impl TemplateApp {
                             s.push_str("...");
                         }
                         ui.horizontal(|ui| {
-                            ui.colored_label(self.theme.comment_fg, format!("{:6}:", i));
+                            ui.colored_label(self.theme.comment, format!("{:6}:", i));
                             ui.colored_label(self.theme.text, s);
                         });
                     } else {
@@ -397,7 +402,7 @@ impl TemplateApp {
                     for x in self.frozen_code.iter() {
                         match x {
                             FrozenStr::Log(s) => {
-                                ui.colored_label(self.theme.comment_fg, s.to_string());
+                                ui.colored_label(self.theme.comment, s.to_string());
                             }
                             FrozenStr::Code(s) => {
                                 if let Some(loc) = self.xs.last_err_location() {
@@ -413,7 +418,7 @@ impl TemplateApp {
                                         continue;
                                     }
                                 }
-                                ui.colored_label(self.theme.code_fg, s.to_string());
+                                ui.colored_label(self.theme.code, s.to_string());
                             }
                         }
                     }
@@ -426,7 +431,7 @@ impl TemplateApp {
                         if let Some(err) = self.xs.last_error() {
                             if show_trial_error {
                                 let s = format!("ERROR: {}", err);
-                                ui.colored_label(self.theme.error_bg, s);
+                                ui.colored_label(self.theme.error, s);
                             }
                         } else {
                             let mut s = String::new();
@@ -437,7 +442,7 @@ impl TemplateApp {
                             if let Some(n) = self.rlog_size() {
                                 write!(s, " RLOG {}", n).unwrap();
                             }
-                            ui.colored_label(self.theme.comment_fg, s);
+                            ui.colored_label(self.theme.comment, s);
                         }
                     }
                     let mut errtok = None;
@@ -581,13 +586,13 @@ impl TemplateApp {
         let (a, b, c) = split_highlight(loc);
         ui.spacing_mut().item_spacing.x = 0.0;
         ui.horizontal_top(|ui| {
-            ui.label(RichText::new(a).monospace().color(self.theme.code_fg));
+            ui.label(RichText::new(a).monospace().color(self.theme.code));
             ui.label(
                 RichText::new(b)
                     .monospace()
-                    .background_color(self.theme.error_bg),
+                    .background_color(self.theme.error),
             );
-            ui.label(RichText::new(c).monospace().color(self.theme.code_fg));
+            ui.label(RichText::new(c).monospace().color(self.theme.code));
         });
         let n: usize = loc
             .whole_line
@@ -596,21 +601,21 @@ impl TemplateApp {
             .map(|c| if c == '\t' { egui::text::TAB_SIZE } else { 1 })
             .sum();
         let pos = format!("{:->1$}", '^', n + 1);
-        ui.colored_label(self.theme.error_bg, pos);
-        ui.colored_label(self.theme.error_bg, format!("{}", err));
+        ui.colored_label(self.theme.error, pos);
+        ui.colored_label(self.theme.error, format!("{}", err));
     }
 
     fn ui_debugger_highlight(&self, ui: &mut Ui, loc: &TokenLocation) {
         let (a, b, c) = split_highlight(loc);
         ui.spacing_mut().item_spacing.x = 0.0;
         ui.horizontal_top(|ui| {
-            ui.label(RichText::new(a).monospace().color(self.theme.code_fg));
+            ui.label(RichText::new(a).monospace().color(self.theme.code));
             ui.label(
                 RichText::new(b)
                     .monospace()
-                    .background_color(self.theme.debug_bg),
+                    .background_color(self.theme.debug_marker),
             );
-            ui.label(RichText::new(c).monospace().color(self.theme.code_fg));
+            ui.label(RichText::new(c).monospace().color(self.theme.code));
         });
     }
 }
@@ -644,13 +649,13 @@ impl epi::App for TemplateApp {
     /// Called once before the first frame.
     fn setup(
         &mut self,
-        ctx: &egui::Context,
+        _ctx: &egui::Context,
         _frame: &epi::Frame,
-        _storage: Option<&dyn epi::Storage>,
+        storage: Option<&dyn epi::Storage>,
     ) {
         #[cfg(feature = "persistence")]
-        if let Some(storage) = _storage {
-            *self = epi::get_value(storage, epi::APP_KEY).unwrap_or_default()
+        if let Some(storage) = storage {
+            self.theme = epi::get_value(storage, epi::APP_KEY).unwrap_or_default()
         }
     }
 
@@ -658,7 +663,7 @@ impl epi::App for TemplateApp {
     /// Note that you must enable the `persistence` feature for this to work.
     #[cfg(feature = "persistence")]
     fn save(&mut self, storage: &mut dyn epi::Storage) {
-        epi::set_value(storage, epi::APP_KEY, self);
+        epi::set_value(storage, epi::APP_KEY, &self.theme);
     }
 
     /// Called each time the UI needs repainting, which may be many times per second.

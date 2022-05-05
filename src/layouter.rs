@@ -39,7 +39,7 @@ pub fn code_layouter(
         j.sections.push(egui::text::LayoutSection {
             leading_space: 0.0,
             byte_range: start..p1,
-            format: TextFormat::simple(font_id.clone(), theme.code_fg),
+            format: TextFormat::simple(font_id.clone(), theme.code),
         });
         let (p2, _) = it.next().unwrap();
         j.sections.push(egui::text::LayoutSection {
@@ -47,11 +47,11 @@ pub fn code_layouter(
             byte_range: p1..p2,
             format: TextFormat {
                 font_id: font_id.clone(),
-                color: theme.code_fg,
+                color: theme.code,
                 background: if dbg == 1 {
-                    theme.debug_bg
+                    theme.debug_marker
                 } else {
-                    theme.error_bg
+                    theme.error
                 },
                 ..Default::default()
             },
@@ -61,7 +61,7 @@ pub fn code_layouter(
     j.sections.push(egui::text::LayoutSection {
         leading_space: 0.0,
         byte_range: start..len,
-        format: TextFormat::simple(font_id.clone(), theme.code_fg),
+        format: TextFormat::simple(font_id.clone(), theme.code),
     });
     j.wrap_width = wrap_width;
     j
