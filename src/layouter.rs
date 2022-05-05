@@ -1,7 +1,7 @@
+use crate::style::*;
 use eframe::egui;
 use eframe::egui::text::TextFormat;
 use xeh::prelude::*;
-use crate::style::*;
 
 pub fn code_layouter(
     text: &str,
@@ -32,9 +32,7 @@ pub fn code_layouter(
             slst.push((dbg_end, 1));
         }
     }
-    slst.sort_by(|a,b| {
-        a.0.cmp(&b.0).then(a.1.cmp(&b.1))
-    });
+    slst.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
     let mut start = 0;
     let mut it = slst.into_iter();
     while let Some((p1, dbg)) = it.next() {
@@ -50,7 +48,11 @@ pub fn code_layouter(
             format: TextFormat {
                 font_id: font_id.clone(),
                 color: theme.code_fg,
-                background: if dbg==1 { theme.debug_bg } else { theme.error_bg },
+                background: if dbg == 1 {
+                    theme.debug_bg
+                } else {
+                    theme.error_bg
+                },
                 ..Default::default()
             },
         });

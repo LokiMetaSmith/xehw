@@ -214,8 +214,12 @@ impl TemplateApp {
                     self.rollback();
                     self.last_dt = Some(t.elapsed().as_secs_f64());
                 }
-                repl_clicked = ui.radio(self.trial_code.is_none(), self.menu_text("REPL")).clicked();
-                trial_clicked = ui.radio(self.trial_code.is_some(), self.menu_text("TRIAL")).clicked();
+                repl_clicked = ui
+                    .radio(self.trial_code.is_none(), self.menu_text("REPL"))
+                    .clicked();
+                trial_clicked = ui
+                    .radio(self.trial_code.is_some(), self.menu_text("TRIAL"))
+                    .clicked();
                 if recording_pressed(ui) {
                     self.rdebug_enabled = !self.rdebug_enabled;
                 }
@@ -223,8 +227,13 @@ impl TemplateApp {
                 self.xs.set_recording_enabled(self.rdebug_enabled);
                 if self.xs.is_recording() {
                     let rnext_enabled = self.rlog_size().map(|n| n > 0).unwrap_or(false);
-                    rnext_clicked = ui.add_enabled(rnext_enabled, Button::new(self.menu_text("Rnext"))).clicked() || rnext_pressed(ui);
-                    next_clicked = ui.add_enabled(self.xs.is_running(), Button::new(self.menu_text("Next"))).clicked()
+                    rnext_clicked = ui
+                        .add_enabled(rnext_enabled, Button::new(self.menu_text("Rnext")))
+                        .clicked()
+                        || rnext_pressed(ui);
+                    next_clicked = ui
+                        .add_enabled(self.xs.is_running(), Button::new(self.menu_text("Next")))
+                        .clicked()
                         || next_pressed(ui);
                 }
                 if ui.button(self.menu_text("Help (Ctrl+G)")).clicked() || help_pressed(ui) {
@@ -234,23 +243,25 @@ impl TemplateApp {
         });
 
         egui::Window::new("Bytecode")
-        .open(&mut self.bytecode_open)
-        .default_pos(pos2(200.0, 400.0))
-        .vscroll(true)
-        .show(ctx, |ui| {
-            //ctx.style_ui(ui);
-            ui.label(format!("ip={}", self.xs.ip()));
-            ui.vertical(|ui| {
-                for (ip, op) in self.xs.bytecode().iter().enumerate() {
-                    let optext = self.xs.fmt_opcode(ip, op);
-                    let mut rich = RichText::new(format!("{:05x}: {}", ip, optext)).monospace().color(self.theme.text);
-                    if ip == self.xs.ip() {
-                        rich = rich.background_color(self.theme.code_highlight);
+            .open(&mut self.bytecode_open)
+            .default_pos(pos2(200.0, 400.0))
+            .vscroll(true)
+            .show(ctx, |ui| {
+                //ctx.style_ui(ui);
+                ui.label(format!("ip={}", self.xs.ip()));
+                ui.vertical(|ui| {
+                    for (ip, op) in self.xs.bytecode().iter().enumerate() {
+                        let optext = self.xs.fmt_opcode(ip, op);
+                        let mut rich = RichText::new(format!("{:05x}: {}", ip, optext))
+                            .monospace()
+                            .color(self.theme.text);
+                        if ip == self.xs.ip() {
+                            rich = rich.background_color(self.theme.code_highlight);
+                        }
+                        ui.label(rich);
                     }
-                    ui.label(rich);
-                }
+                });
             });
-        });
 
         egui::Window::new("Help")
             .open(&mut self.help_open)
@@ -317,7 +328,11 @@ impl TemplateApp {
                             if let Some((val, n)) = it.next() {
                                 let hex_data = RichText::new(format!(" {:02x}", val))
                                     .color(self.theme.text)
-                                    .background_color(if from < offset { self.theme.code_highlight } else { Color32::TRANSPARENT});
+                                    .background_color(if from < offset {
+                                        self.theme.code_highlight
+                                    } else {
+                                        Color32::TRANSPARENT
+                                    });
                                 ui.label(hex_data);
                                 let c = xeh::bitstr_ext::byte_to_dump_char(val);
                                 ascii.push(c);
@@ -429,14 +444,15 @@ impl TemplateApp {
                     let mut dbgtok = None;
                     if show_trial_error {
                         match (self.xs.last_err_location(), &self.trial_code) {
-                            (Some(loc),Some(code)) if loc.token.parent() == code =>
-                                errtok = Some(loc.token.clone()),
+                            (Some(loc), Some(code)) if loc.token.parent() == code => {
+                                errtok = Some(loc.token.clone())
+                            }
                             _ => (),
                         }
                     }
                     if self.is_trial() {
                         match (&self.debug_token, &self.trial_code) {
-                            (Some(loc),Some(code)) if loc.token.parent() == code  => {
+                            (Some(loc), Some(code)) if loc.token.parent() == code => {
                                 dbgtok = Some(loc.token.clone());
                             }
                             _ => (),
@@ -444,7 +460,14 @@ impl TemplateApp {
                     }
                     let mut layouter = |ui: &egui::Ui, text: &str, wrap_width: f32| {
                         let font_id = TextStyle::Monospace.resolve(ui.style());
-                        let j = crate::layouter::code_layouter(text, errtok.as_ref(), dbgtok.as_ref(), &font_id, wrap_width, &self.theme.clone());
+                        let j = crate::layouter::code_layouter(
+                            text,
+                            errtok.as_ref(),
+                            dbgtok.as_ref(),
+                            &font_id,
+                            wrap_width,
+                            &self.theme.clone(),
+                        );
                         ui.fonts().layout_job(j)
                     };
                     let code_id = Id::new("live");
@@ -551,7 +574,7 @@ impl TemplateApp {
     }
 
     fn rlog_size(&self) -> Option<usize> {
-        self.xs.reverse_log.as_ref().map(|rlog|rlog.len())
+        self.xs.reverse_log.as_ref().map(|rlog| rlog.len())
     }
 
     fn ui_error_highlight(&self, ui: &mut Ui, loc: &TokenLocation, err: &Xerr) {
@@ -559,7 +582,11 @@ impl TemplateApp {
         ui.spacing_mut().item_spacing.x = 0.0;
         ui.horizontal_top(|ui| {
             ui.label(RichText::new(a).monospace().color(self.theme.code_fg));
-            ui.label(RichText::new(b).monospace().background_color(self.theme.error_bg));
+            ui.label(
+                RichText::new(b)
+                    .monospace()
+                    .background_color(self.theme.error_bg),
+            );
             ui.label(RichText::new(c).monospace().color(self.theme.code_fg));
         });
         let n: usize = loc
@@ -578,7 +605,11 @@ impl TemplateApp {
         ui.spacing_mut().item_spacing.x = 0.0;
         ui.horizontal_top(|ui| {
             ui.label(RichText::new(a).monospace().color(self.theme.code_fg));
-            ui.label(RichText::new(b).monospace().background_color(self.theme.debug_bg));
+            ui.label(
+                RichText::new(b)
+                    .monospace()
+                    .background_color(self.theme.debug_bg),
+            );
             ui.label(RichText::new(c).monospace().color(self.theme.code_fg));
         });
     }
@@ -621,7 +652,6 @@ impl epi::App for TemplateApp {
         if let Some(storage) = _storage {
             *self = epi::get_value(storage, epi::APP_KEY).unwrap_or_default()
         }
-        crate::style::tune(ctx, &self.theme);
     }
 
     /// Called by the frame work to save state before shutdown.
@@ -634,6 +664,7 @@ impl epi::App for TemplateApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, _frame: &epi::Frame) {
+        crate::style::tune(ctx, &self.theme);
         if crate::hotkeys::interactive_canvas_pressed(ctx) {
             self.canvas.interactive = !self.canvas.interactive;
         }

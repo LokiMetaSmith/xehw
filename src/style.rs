@@ -39,6 +39,12 @@ impl Default for Theme {
 }
 
 pub fn tune(ctx: &Context, theme: &Theme) {
+    if ctx.style().visuals.widgets.noninteractive.bg_fill == theme.background
+        && ctx.style().visuals.selection.bg_fill == theme.selection
+        && ctx.style().visuals.override_text_color == Some(theme.text)
+    {
+        return;
+    }
     let mut style = (*ctx.style()).clone();
     style.visuals = Visuals::light();
     style.override_text_style = Some(TextStyle::Monospace);
