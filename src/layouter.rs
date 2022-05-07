@@ -6,7 +6,7 @@ use xeh::prelude::*;
 pub fn word_under_cursor(s: &String, char_index: Option<usize>) -> Option<String> {
     let char_index = char_index?;
     let mut it = s.char_indices();
-    let mut start= 0;
+    let mut start = 0;
     let mut end = s.len();
     let mut cur_index = 0;
     while let Some((ci, c)) = it.next() {

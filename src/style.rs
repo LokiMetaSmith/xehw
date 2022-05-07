@@ -13,7 +13,6 @@ const TEXT_HIGLIGHT: Color32 = Color32::from_rgb(0xD8, 0xD5, 0xC7);
 const COMMENT_FG: Color32 = Color32::from_rgb(0xAA, 0xAA, 0xAA);
 const SCROLL_BORDER: Color32 = COMMENT_FG;
 
-
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[cfg_attr(feature = "persistence", derive(serde::Deserialize, serde::Serialize))]
 #[cfg_attr(feature = "persistence", serde(default))] // if we add new fields, give them default values when deserializing old state

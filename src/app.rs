@@ -14,7 +14,11 @@ type Instant = std::time::Instant;
 type BoxFuture = Box<dyn Future<Output = Vec<u8>>>;
 
 #[derive(PartialEq)]
-enum HelpMode {    Hotkeys, Cheatsheet, Index }
+enum HelpMode {
+    Hotkeys,
+    Cheatsheet,
+    Index,
+}
 
 pub struct TemplateApp {
     xs: Xstate,
@@ -79,7 +83,6 @@ impl Default for TemplateApp {
 }
 
 impl TemplateApp {
-
     fn xs_respawn() -> Xstate {
         let mut xs = Xstate::boot().unwrap();
         xs.intercept_stdout(true);
@@ -179,7 +182,7 @@ impl TemplateApp {
         let mut rnext_clicked = false;
         let mut repl_clicked = false;
         let mut trial_clicked = false;
-        let win_rect= ctx.available_rect();
+        let win_rect = ctx.available_rect();
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -286,19 +289,27 @@ impl TemplateApp {
                 });
             });
 
-            
         let help_pos = pos2(win_rect.width() * 0.25, win_rect.height() * 0.25);
         egui::Window::new("Help")
             .open(&mut self.help_open)
             .default_pos(help_pos)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    ui.selectable_value(&mut self.help_mode, HelpMode::Hotkeys, 
-                        RichText::new("Hotkeys").heading());
-                    ui.selectable_value(&mut self.help_mode, HelpMode::Cheatsheet, 
-                        RichText::new("Cheatsheet").heading());
-                    ui.selectable_value(&mut self.help_mode, HelpMode::Index, 
-                        RichText::new("Index").heading());
+                    ui.selectable_value(
+                        &mut self.help_mode,
+                        HelpMode::Hotkeys,
+                        RichText::new("Hotkeys").heading(),
+                    );
+                    ui.selectable_value(
+                        &mut self.help_mode,
+                        HelpMode::Cheatsheet,
+                        RichText::new("Cheatsheet").heading(),
+                    );
+                    ui.selectable_value(
+                        &mut self.help_mode,
+                        HelpMode::Index,
+                        RichText::new("Index").heading(),
+                    );
                 });
                 match self.help_mode {
                     HelpMode::Hotkeys => {
@@ -308,52 +319,67 @@ impl TemplateApp {
                                 ui.colored_label(self.theme.debug_marker, combo);
                             });
                         };
-                        ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
-                            ui.heading("Hotkeys");
-                            add(ui, "Open binary file...", "(Ctrl + O)");
-                            add(ui, "Program - Run", "(Ctrl + R)");
-                            add(ui, "Program - Snapshot", "(Ctrl + S)");
-                            add(ui, "Program - Rollback", "(Ctrl + L)");
-                            add(ui, "Debugger - Next", "(Ctrl + B)");
-                            add(ui, "Debugger - Reverse Next", "(Ctrl + N)");
-                            add(ui, "Debugger - Toggle Recording", "(Ctrl + Y)");
-                            add(ui, "Canvas - Toggle Show", "(Ctrl + M)");
-                            add(ui, "Switch to Hex Panel", "(Ctrl + 1)");
-                            add(ui, "Switch to Code Panel", "(Ctrl + 2)");
-                            add(ui, "Help - Show", "(Ctrl + G)");
-                            ui.heading("Mouse");
-                            ui.colored_label(self.theme.text, "Open binary file with Drag and Drop");
-                        });
+                        ScrollArea::vertical()
+                            .auto_shrink([false; 2])
+                            .show(ui, |ui| {
+                                ui.heading("Hotkeys");
+                                add(ui, "Open binary file...", "(Ctrl + O)");
+                                add(ui, "Program - Run", "(Ctrl + R)");
+                                add(ui, "Program - Snapshot", "(Ctrl + S)");
+                                add(ui, "Program - Rollback", "(Ctrl + L)");
+                                add(ui, "Debugger - Next", "(Ctrl + B)");
+                                add(ui, "Debugger - Reverse Next", "(Ctrl + N)");
+                                add(ui, "Debugger - Toggle Recording", "(Ctrl + Y)");
+                                add(ui, "Canvas - Toggle Show", "(Ctrl + M)");
+                                add(ui, "Switch to Hex Panel", "(Ctrl + 1)");
+                                add(ui, "Switch to Code Panel", "(Ctrl + 2)");
+                                add(ui, "Help - Show", "(Ctrl + G)");
+                                ui.heading("Mouse");
+                                ui.colored_label(
+                                    self.theme.text,
+                                    "Open binary file with Drag and Drop",
+                                );
+                            });
                     }
                     HelpMode::Cheatsheet => {
-                        ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
-                            ui.heading("Todo");
-                        });
+                        ScrollArea::vertical()
+                            .auto_shrink([false; 2])
+                            .show(ui, |ui| {
+                                ui.heading("Todo");
+                            });
                     }
                     HelpMode::Index => {
-                        let pat = self.help_pattern.as_ref().map(|s| s.as_bytes()).unwrap_or(&[]);
+                        let pat = self
+                            .help_pattern
+                            .as_ref()
+                            .map(|s| s.as_bytes())
+                            .unwrap_or(&[]);
                         let old_spacing = ui.spacing().item_spacing;
                         ui.spacing_mut().item_spacing.y = 10.0;
-                        ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
-                            for word in &self.help_words {
-                                if pat.is_empty() || word.as_bytes().starts_with(pat) {
-                                    let name = RichText::new(word.as_str()).color(self.theme.code).background_color(self.theme.highlight);
-                                    ui.monospace(name);
-                                    if let Some(help) = self.xs.help_str(word) {
-                                        ui.horizontal(|ui| {
-                                            if let Ok(s) = help.str() {
-                                                ui.label(s);
-                                            }
-                                        });
+                        ScrollArea::vertical()
+                            .auto_shrink([false; 2])
+                            .show(ui, |ui| {
+                                for word in &self.help_words {
+                                    if pat.is_empty() || word.as_bytes().starts_with(pat) {
+                                        let name = RichText::new(word.as_str())
+                                            .color(self.theme.code)
+                                            .background_color(self.theme.highlight);
+                                        ui.monospace(name);
+                                        if let Some(help) = self.xs.help_str(word) {
+                                            ui.horizontal(|ui| {
+                                                if let Ok(s) = help.str() {
+                                                    ui.label(s);
+                                                }
+                                            });
+                                        }
                                     }
                                 }
-                            }
-                        });
+                            });
                         ui.spacing_mut().item_spacing = old_spacing;
                     }
                 }
-            });//help
-               
+            }); //help
+
         let hex_panel = egui::SidePanel::left("left_panel").show(ctx, |ui| {
             let ncols = self.num_cols * 4 + 10;
             let total_rows = self.num_rows;
