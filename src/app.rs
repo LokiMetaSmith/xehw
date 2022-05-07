@@ -13,6 +13,9 @@ type Instant = std::time::Instant;
 
 type BoxFuture = Box<dyn Future<Output = Vec<u8>>>;
 
+#[derive(PartialEq)]
+enum HelpMode {    Hotkeys, Cheatsheet, Index }
+
 pub struct TemplateApp {
     xs: Xstate,
     start_row: isize,
@@ -31,6 +34,9 @@ pub struct TemplateApp {
     setup_focus: bool,
     bytecode_open: bool,
     help_open: bool,
+    help_mode: HelpMode,
+    help_words: Vec<Xstr>,
+    help_pattern: Option<String>,
     theme: Theme,
     theme_editor: bool,
 }
@@ -43,9 +49,8 @@ enum FrozenStr {
 
 impl Default for TemplateApp {
     fn default() -> Self {
-        let mut xs = Xstate::boot().unwrap();
-        xs.intercept_stdout(true);
-        xeh::d2_plugin::load(&mut xs).unwrap();
+        let xs = Self::xs_respawn();
+        let words = xs.word_list();
         Self {
             xs,
             start_row: 0,
@@ -64,6 +69,9 @@ impl Default for TemplateApp {
             rdebug_enabled: false,
             bytecode_open: false,
             help_open: false,
+            help_mode: HelpMode::Index,
+            help_words: words,
+            help_pattern: None,
             theme: Theme::default(),
             theme_editor: false,
         }
@@ -71,6 +79,15 @@ impl Default for TemplateApp {
 }
 
 impl TemplateApp {
+
+    fn xs_respawn() -> Xstate {
+        let mut xs = Xstate::boot().unwrap();
+        xs.intercept_stdout(true);
+        xeh::d2_plugin::load(&mut xs).unwrap();
+        xs.eval(include_str!("../../xeh/docs/help.xs")).unwrap();
+        xs
+    }
+
     fn move_view(&mut self, nrows: isize) {
         let n = (self.start_row + nrows)
             .max(0)
@@ -110,7 +127,7 @@ impl TemplateApp {
 
     fn reload_state(&mut self) {
         let buf = self.collect_frozen_code();
-        self.xs = Xstate::boot().unwrap();
+        self.xs = Self::xs_respawn();
         self.live_code = buf;
         self.frozen_code.clear();
         if let Some(bin) = &self.input_binary {
@@ -162,6 +179,7 @@ impl TemplateApp {
         let mut rnext_clicked = false;
         let mut repl_clicked = false;
         let mut trial_clicked = false;
+        let win_rect= ctx.available_rect();
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -268,33 +286,74 @@ impl TemplateApp {
                 });
             });
 
+            
+        let help_pos = pos2(win_rect.width() * 0.25, win_rect.height() * 0.25);
         egui::Window::new("Help")
             .open(&mut self.help_open)
-            .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
-            .vscroll(true)
+            .default_pos(help_pos)
             .show(ctx, |ui| {
-                let add = |ui: &mut Ui, text, combo| {
-                    ui.horizontal(|ui| {
-                        ui.colored_label(self.theme.text, text);
-                        ui.colored_label(self.theme.debug_marker, combo);
-                    });
-                };
-                ui.heading("Hotkeys");
-                add(ui, "Open binary file...", "(Ctrl + O)");
-                add(ui, "Program - Run", "(Ctrl + R)");
-                add(ui, "Program - Snapshot", "(Ctrl + S)");
-                add(ui, "Program - Rollback", "(Ctrl + L)");
-                add(ui, "Debugger - Next", "(Ctrl + B)");
-                add(ui, "Debugger - Reverse Next", "(Ctrl + N)");
-                add(ui, "Debugger - Toggle Recording", "(Ctrl + Y)");
-                add(ui, "Canvas - Toggle Show", "(Ctrl + M)");
-                add(ui, "Switch to Hex Panel", "(Ctrl + 1)");
-                add(ui, "Switch to Code Panel", "(Ctrl + 2)");
-                add(ui, "Help - Show", "(Ctrl + G)");
-                ui.heading("Mouse");
-                ui.colored_label(self.theme.text, "Open new binary with Drag and Drop");
-            });
-
+                ui.horizontal(|ui| {
+                    ui.selectable_value(&mut self.help_mode, HelpMode::Hotkeys, 
+                        RichText::new("Hotkeys").heading());
+                    ui.selectable_value(&mut self.help_mode, HelpMode::Cheatsheet, 
+                        RichText::new("Cheatsheet").heading());
+                    ui.selectable_value(&mut self.help_mode, HelpMode::Index, 
+                        RichText::new("Index").heading());
+                });
+                match self.help_mode {
+                    HelpMode::Hotkeys => {
+                        let add = |ui: &mut Ui, text, combo| {
+                            ui.horizontal(|ui| {
+                                ui.colored_label(self.theme.text, text);
+                                ui.colored_label(self.theme.debug_marker, combo);
+                            });
+                        };
+                        ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
+                            ui.heading("Hotkeys");
+                            add(ui, "Open binary file...", "(Ctrl + O)");
+                            add(ui, "Program - Run", "(Ctrl + R)");
+                            add(ui, "Program - Snapshot", "(Ctrl + S)");
+                            add(ui, "Program - Rollback", "(Ctrl + L)");
+                            add(ui, "Debugger - Next", "(Ctrl + B)");
+                            add(ui, "Debugger - Reverse Next", "(Ctrl + N)");
+                            add(ui, "Debugger - Toggle Recording", "(Ctrl + Y)");
+                            add(ui, "Canvas - Toggle Show", "(Ctrl + M)");
+                            add(ui, "Switch to Hex Panel", "(Ctrl + 1)");
+                            add(ui, "Switch to Code Panel", "(Ctrl + 2)");
+                            add(ui, "Help - Show", "(Ctrl + G)");
+                            ui.heading("Mouse");
+                            ui.colored_label(self.theme.text, "Open binary file with Drag and Drop");
+                        });
+                    }
+                    HelpMode::Cheatsheet => {
+                        ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
+                            ui.heading("Todo");
+                        });
+                    }
+                    HelpMode::Index => {
+                        let pat = self.help_pattern.as_ref().map(|s| s.as_bytes()).unwrap_or(&[]);
+                        let old_spacing = ui.spacing().item_spacing;
+                        ui.spacing_mut().item_spacing.y = 10.0;
+                        ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
+                            for word in &self.help_words {
+                                if pat.is_empty() || word.as_bytes().starts_with(pat) {
+                                    let name = RichText::new(word.as_str()).color(self.theme.code).background_color(self.theme.highlight);
+                                    ui.monospace(name);
+                                    if let Some(help) = self.xs.help_str(word) {
+                                        ui.horizontal(|ui| {
+                                            if let Ok(s) = help.str() {
+                                                ui.label(s);
+                                            }
+                                        });
+                                    }
+                                }
+                            }
+                        });
+                        ui.spacing_mut().item_spacing = old_spacing;
+                    }
+                }
+            });//help
+               
         let hex_panel = egui::SidePanel::left("left_panel").show(ctx, |ui| {
             let ncols = self.num_cols * 4 + 10;
             let total_rows = self.num_rows;
@@ -477,19 +536,26 @@ impl TemplateApp {
                         ui.fonts().layout_job(j)
                     };
                     let code_id = Id::new("live");
+                    ui.style_mut().visuals.extreme_bg_color = self.theme.code_background;
                     let code = egui::TextEdit::multiline(&mut self.live_code)
                         .desired_rows(1)
                         .desired_width(f32::INFINITY)
                         .code_editor()
                         .margin(vec2(1.0, 1.0))
                         .id(code_id)
-                        .layouter(&mut layouter);
-                    let code_resp = ui.add(code);
+                        .layouter(&mut layouter)
+                        .show(ui);
+                    ui.style_mut().visuals.extreme_bg_color = self.theme.scroll;
+                    let word = crate::layouter::word_under_cursor(
+                        &self.live_code,
+                        code.cursor_range.map(|c| c.primary.ccursor.index),
+                    );
+                    self.help_pattern = word;
                     if hotkeys::switch_to_code_pressed(&ctx.input()) || self.setup_focus {
-                        code_resp.request_focus();
+                        code.response.request_focus();
                         self.setup_focus = false;
                     }
-                    live_has_focus = code_resp.has_focus();
+                    live_has_focus = code.response.has_focus();
                     if live_has_focus && run_pressed(ui) {
                         run_clicked = true;
                     }
@@ -573,6 +639,8 @@ impl TemplateApp {
                 }
             }
         });
+
+        // CentralPanel end
     }
 
     fn is_trial(&self) -> bool {

@@ -30,7 +30,7 @@ opt-level = 2 # fast and small wasm
 [patch.crates-io]
 
 # If you fork https://github.com/emilk/egui you can test with:
-eframe = { path = "../egui/eframe" }
+eframe = { path = "../egui/eframe", features = ["persistence"] }
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

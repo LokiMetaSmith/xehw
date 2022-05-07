@@ -7,9 +7,12 @@ const BLUE: Color32 = Color32::from_rgb(0x1E, 0x6F, 0xCC);
 // const PURPLE: Color32 = Color32::from_rgb(0x5C, 0x21, 0xA5);
 const CYAN: Color32 = Color32::from_rgb(0x15, 0x8C, 0x86);
 const BACKGROUND: Color32 = Color32::from_rgb(0xF2, 0xEE, 0xDE);
+const CODE_BACKGROUND: Color32 = Color32::TRANSPARENT;
 const TEXT: Color32 = Color32::from_rgb(0x00, 0x00, 0x00);
 const TEXT_HIGLIGHT: Color32 = Color32::from_rgb(0xD8, 0xD5, 0xC7);
 const COMMENT_FG: Color32 = Color32::from_rgb(0xAA, 0xAA, 0xAA);
+const SCROLL_BORDER: Color32 = COMMENT_FG;
+
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[cfg_attr(feature = "persistence", derive(serde::Deserialize, serde::Serialize))]
@@ -18,12 +21,14 @@ const COMMENT_FG: Color32 = Color32::from_rgb(0xAA, 0xAA, 0xAA);
 pub struct Theme {
     pub text: Color32,
     pub code: Color32,
+    pub code_background: Color32,
     pub error: Color32,
     pub debug_marker: Color32,
     pub comment: Color32,
     pub highlight: Color32,
     pub background: Color32,
     pub selection: Color32,
+    pub scroll: Color32,
     current_item: usize,
 }
 
@@ -38,6 +43,8 @@ impl Default for Theme {
             highlight: TEXT_HIGLIGHT,
             comment: COMMENT_FG,
             selection: BLUE,
+            scroll: SCROLL_BORDER,
+            code_background: CODE_BACKGROUND,
             current_item: 0,
         }
     }
@@ -50,10 +57,12 @@ impl Theme {
             ("text", &mut self.text),
             ("selection", &mut self.selection),
             ("code", &mut self.code),
+            ("code_background", &mut self.code_background),
             ("comment", &mut self.comment),
             ("error", &mut self.error),
             ("debug", &mut self.debug_marker),
             ("highlight", &mut self.highlight),
+            ("scroll", &mut self.scroll),
         ];
         let mut reset = false;
         ui.horizontal_top(|ui| {
@@ -62,9 +71,7 @@ impl Theme {
                     let text = RichText::new(tab[i].0);
                     ui.radio_value(&mut self.current_item, i, text);
                 }
-                reset = ui
-                    .button(RichText::new("Reset Theme"))
-                    .clicked();
+                reset = ui.button(RichText::new("Reset Theme")).clicked();
             });
             ui.vertical(|ui| {
                 let i = self.current_item;
@@ -110,21 +117,19 @@ impl Theme {
 }
 
 pub fn tune(ctx: &Context, theme: &Theme) {
-    if ctx.style().visuals.widgets.noninteractive.bg_fill == theme.background
-        && ctx.style().visuals.selection.bg_fill == theme.selection
-        && ctx.style().visuals.override_text_color == Some(theme.text)
-    {
-        return;
-    }
     let mut style = (*ctx.style()).clone();
     style.visuals = Visuals::light();
     style.override_text_style = Some(TextStyle::Monospace);
+    style.visuals.window_shadow.extrusion = 4.0;
+    style.visuals.window_rounding = Rounding::same(0.0);
     style.visuals.override_text_color = Some(theme.text);
     style.visuals.text_cursor_width = 1.0;
     style.visuals.selection.bg_fill = theme.selection;
     style.visuals.button_frame = false;
-    style.visuals.extreme_bg_color = Color32::from_rgba_unmultiplied(0x77, 0x77, 0x77, 30);
+    style.visuals.extreme_bg_color = theme.scroll;
     style.visuals.widgets.inactive.rounding = Rounding::same(0.0);
+    style.visuals.widgets.inactive.bg_stroke.width = 1.0;
+    style.visuals.widgets.inactive.bg_stroke.color = theme.scroll;
     style.visuals.widgets.noninteractive.bg_fill = theme.background;
     style.visuals.widgets.noninteractive.rounding = Rounding::same(0.0);
     style.visuals.widgets.noninteractive.bg_stroke.width = 0.0;
