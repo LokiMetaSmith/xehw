@@ -517,7 +517,7 @@ impl TemplateApp {
                         if let Some(err) = self.xs.last_error() {
                             if show_trial_error {
                                 let s = format!("ERROR: {}", err);
-                                ui.colored_label(self.theme.error, s);
+                                ui.colored_label(self.theme.text, s);
                             }
                         } else {
                             let mut s = String::new();
