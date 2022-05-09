@@ -73,7 +73,7 @@ impl Default for TemplateApp {
             rdebug_enabled: false,
             bytecode_open: false,
             help_open: false,
-            help_mode: HelpMode::Index,
+            help_mode: HelpMode::Hotkeys,
             help_words: words,
             help_pattern: None,
             theme: Theme::default(),
