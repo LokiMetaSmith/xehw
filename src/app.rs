@@ -43,6 +43,7 @@ pub struct TemplateApp {
     help_pattern: Option<String>,
     theme: Theme,
     theme_editor: bool,
+    example_request: Option<(&'static str, &'static [u8])>,
 }
 
 #[derive(Clone)]
@@ -78,6 +79,7 @@ impl Default for TemplateApp {
             help_pattern: None,
             theme: Theme::default(),
             theme_editor: false,
+            example_request: None,
         }
     }
 }
@@ -374,6 +376,9 @@ impl TemplateApp {
                 if ui.button(self.menu_text("Help (Ctrl+G)")).clicked() || help_pressed(ui) {
                     self.help_open = !self.help_open;
                 }
+                ui.menu_button("Examples", |ui| {
+                    self.menu_examples(ui);
+                });
                 if ui.button(self.menu_text("Theme")).clicked() {
                     self.theme_editor = !self.theme_editor;
                 }
@@ -715,6 +720,18 @@ impl TemplateApp {
             ui.label(RichText::new(c).monospace().color(self.theme.code));
         });
     }
+
+    fn menu_examples(&mut self, ui: &mut Ui) {
+        if ui.button("C string").clicked() {
+            self.example_request = Some((include_str!("../docs/examples/cstring.xeh"), &[]));
+            ui.close_menu();
+        }
+        // if ui.button("6502 instructions").clicked() {
+        //     self.example_request = Some(include_str!("docs/ex/6502.xeh"),
+        //                                    include_bytes!("docs/ex/6502.bin"));
+        //     ui.close_menu();
+        // }
+    }
 }
 
 use std::future::Future;
@@ -767,6 +784,11 @@ impl epi::App for TemplateApp {
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, _frame: &epi::Frame) {
         crate::style::tune(ctx, &self.theme);
+        if let Some((code, data)) = self.example_request.take() {
+            self.frozen_code.clear();
+            self.binary_dropped(Xbitstr::from(data));
+            self.live_code = code.to_string();
+        }
         if crate::hotkeys::interactive_canvas_pressed(ctx) {
             self.canvas.interactive = !self.canvas.interactive;
         }

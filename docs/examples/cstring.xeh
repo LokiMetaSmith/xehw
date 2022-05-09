@@ -1,0 +1,7 @@
+
+# load sample data
+[ "Bella ciao" 0 ] >bitstr open-bitstr
+
+# read bytes until zero
+[ begin u8 zero? until ] println
+
