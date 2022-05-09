@@ -298,6 +298,88 @@ impl TemplateApp {
                 }
             }); //help
 
+        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                if ui.button(self.menu_text("Open...")).clicked() {
+                    self.bin_future = Some(Box::pin(async {
+                        let res = rfd::AsyncFileDialog::new().pick_file().await;
+                        if let Some(file) = res {
+                            file.read().await
+                        } else {
+                            Vec::new()
+                        }
+                    }));
+                }
+                if let Some(future) = self.bin_future.as_mut() {
+                    let waker = Arc::new(MyWaker()).into();
+                    let context = &mut Context::from_waker(&waker);
+                    match Pin::new(future).poll(context) {
+                        Poll::Pending => (),
+                        Poll::Ready(data) => {
+                            let s = Xbitstr::from(data);
+                            self.bin_future.take();
+                            self.binary_dropped(s);
+                        }
+                    }
+                }
+                if let Some(d) = ctx.input().raw.dropped_files.first() {
+                    if let Some(data) = &d.bytes {
+                        let s = Xbitstr::from(data.as_ref().to_owned());
+                        self.binary_dropped(s);
+                    }
+                }
+
+                run_clicked = ui.button(self.menu_text("Run")).clicked();
+                snapshot_clicked = ui
+                    .add_enabled(!self.is_trial(), Button::new(self.menu_text("Snapshot")))
+                    .clicked()
+                    || snapshot_pressed(ui);
+                if snapshot_clicked && !self.is_trial() {
+                    let t = Instant::now();
+                    self.snapshot();
+                    self.last_dt = Some(t.elapsed().as_secs_f64());
+                }
+                let rollback_enabled = self.snapshot.is_some() && !self.is_trial();
+                rollback_clicked = ui
+                    .add_enabled(rollback_enabled, Button::new(self.menu_text("Rollback")))
+                    .clicked()
+                    || rollback_pressed(ui);
+                if rollback_clicked && rollback_enabled {
+                    let t = Instant::now();
+                    self.rollback();
+                    self.last_dt = Some(t.elapsed().as_secs_f64());
+                }
+                repl_clicked = ui
+                    .radio(self.trial_code.is_none(), self.menu_text("REPL"))
+                    .clicked();
+                trial_clicked = ui
+                    .radio(self.trial_code.is_some(), self.menu_text("TRIAL"))
+                    .clicked();
+                if recording_pressed(ui) {
+                    self.rdebug_enabled = !self.rdebug_enabled;
+                }
+                ui.checkbox(&mut self.rdebug_enabled, "RRecord");
+                self.xs.set_recording_enabled(self.rdebug_enabled);
+                if self.xs.is_recording() {
+                    let rnext_enabled = self.rlog_size().map(|n| n > 0).unwrap_or(false);
+                    rnext_clicked = ui
+                        .add_enabled(rnext_enabled, Button::new(self.menu_text("Rnext")))
+                        .clicked()
+                        || rnext_pressed(ui);
+                    next_clicked = ui
+                        .add_enabled(self.xs.is_running(), Button::new(self.menu_text("Next")))
+                        .clicked()
+                        || next_pressed(ui);
+                }
+                if ui.button(self.menu_text("Help (Ctrl+G)")).clicked() || help_pressed(ui) {
+                    self.help_open = !self.help_open;
+                }
+                if ui.button(self.menu_text("Theme")).clicked() {
+                    self.theme_editor = !self.theme_editor;
+                }
+            });
+        }); // top panel
+
         let hex_panel = egui::SidePanel::left("left_panel").show(ctx, |ui| {
             let ncols = self.num_cols * 4 + 10;
             let total_rows = self.num_rows;
@@ -397,92 +479,10 @@ impl TemplateApp {
             hex_panel.response.request_focus();
         }
 
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                if ui.button(self.menu_text("Open...")).clicked() {
-                    self.bin_future = Some(Box::pin(async {
-                        let res = rfd::AsyncFileDialog::new().pick_file().await;
-                        if let Some(file) = res {
-                            file.read().await
-                        } else {
-                            Vec::new()
-                        }
-                    }));
-                }
-                if let Some(future) = self.bin_future.as_mut() {
-                    let waker = Arc::new(MyWaker()).into();
-                    let context = &mut Context::from_waker(&waker);
-                    match Pin::new(future).poll(context) {
-                        Poll::Pending => (),
-                        Poll::Ready(data) => {
-                            let s = Xbitstr::from(data);
-                            self.bin_future.take();
-                            self.binary_dropped(s);
-                        }
-                    }
-                }
-                if let Some(d) = ctx.input().raw.dropped_files.first() {
-                    if let Some(data) = &d.bytes {
-                        let s = Xbitstr::from(data.as_ref().to_owned());
-                        self.binary_dropped(s);
-                    }
-                }
-
-                run_clicked = ui.button(self.menu_text("Run")).clicked();
-                snapshot_clicked = ui
-                    .add_enabled(!self.is_trial(), Button::new(self.menu_text("Snapshot")))
-                    .clicked()
-                    || snapshot_pressed(ui);
-                if snapshot_clicked && !self.is_trial() {
-                    let t = Instant::now();
-                    self.snapshot();
-                    self.last_dt = Some(t.elapsed().as_secs_f64());
-                }
-                let rollback_enabled = self.snapshot.is_some() && !self.is_trial();
-                rollback_clicked = ui
-                    .add_enabled(rollback_enabled, Button::new(self.menu_text("Rollback")))
-                    .clicked()
-                    || rollback_pressed(ui);
-                if rollback_clicked && rollback_enabled {
-                    let t = Instant::now();
-                    self.rollback();
-                    self.last_dt = Some(t.elapsed().as_secs_f64());
-                }
-                repl_clicked = ui
-                    .radio(self.trial_code.is_none(), self.menu_text("REPL"))
-                    .clicked();
-                trial_clicked = ui
-                    .radio(self.trial_code.is_some(), self.menu_text("TRIAL"))
-                    .clicked();
-                if recording_pressed(ui) {
-                    self.rdebug_enabled = !self.rdebug_enabled;
-                }
-                ui.checkbox(&mut self.rdebug_enabled, "RRecord");
-                self.xs.set_recording_enabled(self.rdebug_enabled);
-                if self.xs.is_recording() {
-                    let rnext_enabled = self.rlog_size().map(|n| n > 0).unwrap_or(false);
-                    rnext_clicked = ui
-                        .add_enabled(rnext_enabled, Button::new(self.menu_text("Rnext")))
-                        .clicked()
-                        || rnext_pressed(ui);
-                    next_clicked = ui
-                        .add_enabled(self.xs.is_running(), Button::new(self.menu_text("Next")))
-                        .clicked()
-                        || next_pressed(ui);
-                }
-                if ui.button(self.menu_text("Help (Ctrl+G)")).clicked() || help_pressed(ui) {
-                    self.help_open = !self.help_open;
-                }
-                if ui.button(self.menu_text("Theme")).clicked() {
-                    self.theme_editor = !self.theme_editor;
-                }
-            });
-        });
-
         egui::CentralPanel::default().show(ctx, |ui| {
             let mut live_has_focus = false;
 
-            egui::containers::ScrollArea::vertical()
+             egui::containers::ScrollArea::vertical()
                 .stick_to_bottom()
                 .show(ui, |ui| {
                     for x in self.frozen_code.iter() {
@@ -594,6 +594,7 @@ impl TemplateApp {
                     self.move_view(n);
                 }
             }
+
             if let Some(s) = self.xs.stdout() {
                 if !s.is_empty() {
                     self.frozen_code.push(FrozenStr::Log(s.take()));
