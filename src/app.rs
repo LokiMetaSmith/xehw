@@ -595,11 +595,6 @@ impl TemplateApp {
                 }
             }
 
-            if let Some(s) = self.xs.stdout() {
-                if !s.is_empty() {
-                    self.frozen_code.push(FrozenStr::Log(s.take()));
-                }
-            }
             if self.is_trial() && repl_clicked {
                 self.rollback();
                 self.trial_code = None;
@@ -626,7 +621,7 @@ impl TemplateApp {
                     self.debug_token = self.xs.location_from_current_ip();
                     self.last_dt = Some(t.elapsed().as_secs_f64());
                 }
-                if self.xs.last_error().is_some() {
+                if self.xs.last_error().is_some() || self.xs.is_running() {
                     // prevent from saving errorneous code
                     run_clicked = false;
                 }
@@ -663,6 +658,12 @@ impl TemplateApp {
                 self.debug_token = self.xs.location_from_current_ip();
                 if let Ok((w, h, buf)) = crate::canvas::copy_rgba(&mut self.xs) {
                     self.canvas.update(ctx, w, h, buf);
+                }
+            }
+            if let Some(s) = self.xs.stdout() {
+                if !s.is_empty() {
+                    let log = FrozenStr::Log(s.take());
+                    self.frozen_code.push(log);
                 }
             }
         });
