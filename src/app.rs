@@ -488,7 +488,7 @@ impl TemplateApp {
                     for x in self.frozen_code.iter() {
                         match x {
                             FrozenStr::Log(s) => {
-                                ui.colored_label(self.theme.comment, s.to_string());
+                                ui.colored_label(self.theme.comment, s.trim_end().to_string());
                             }
                             FrozenStr::Code(s) => {
                                 if let Some(loc) = self.xs.last_err_location() {
