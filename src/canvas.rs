@@ -33,10 +33,6 @@ impl Canvas {
                 self.offs += ctx.input().pointer.delta();
             }
         }
-        if self.tex.is_none() {
-            let t = ctx.load_texture("1", ColorImage::example());
-            self.tex = Some(t);
-        }
         CentralPanel::default().show(ctx, |ui| {
             //ui.with_layer_id(LayerId::background(), |ui| {
             if let Some(texture) = self.tex.as_ref() {
