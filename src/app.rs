@@ -247,8 +247,8 @@ impl TemplateApp {
                                 add(ui, "Program - Rollback", "(Ctrl + L)");
                                 add(ui, "Debugger - Next", "(Ctrl + B)");
                                 add(ui, "Debugger - Reverse Next", "(Ctrl + N)");
-                                add(ui, "Debugger - Toggle Recording", "(Ctrl + Y)");
-                                add(ui, "Canvas - Toggle Show", "(Ctrl + M)");
+                                add(ui, "Debugger - Toggle Reverse Next Recording", "(Ctrl + Y)");
+                                add(ui, "Canvas - Show", "(Ctrl + M)");
                                 add(ui, "Switch to Hex Panel", "(Ctrl + 1)");
                                 add(ui, "Switch to Code Panel", "(Ctrl + 2)");
                                 add(ui, "Help - Show", "(Ctrl + G)");
