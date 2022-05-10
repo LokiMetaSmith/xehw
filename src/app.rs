@@ -553,7 +553,7 @@ impl TemplateApp {
                     }
                     let mut layouter = |ui: &egui::Ui, text: &str, wrap_width: f32| {
                         let font_id = TextStyle::Monospace.resolve(ui.style());
-                        let j = crate::layouter::code_layouter(
+                        let j = layouter::code_layouter(
                             text,
                             errtok.as_ref(),
                             dbgtok.as_ref(),
@@ -574,7 +574,7 @@ impl TemplateApp {
                         .layouter(&mut layouter)
                         .show(ui);
                     ui.style_mut().visuals.extreme_bg_color = self.theme.scroll;
-                    let word = crate::layouter::word_under_cursor(
+                    let word = layouter::word_under_cursor(
                         &self.live_code,
                         code.cursor_range.map(|c| c.primary.ccursor.index),
                     );
