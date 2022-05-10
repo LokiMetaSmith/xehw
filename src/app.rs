@@ -1,7 +1,7 @@
 use eframe::egui::*;
 use eframe::{egui, epi};
 
-use crate::canvas::*;
+use crate::{canvas::*, layouter};
 use crate::hotkeys::*;
 use crate::{hotkeys, style::*};
 use xeh::prelude::*;
@@ -50,6 +50,7 @@ pub struct TemplateApp {
 enum FrozenStr {
     Code(Xsubstr),
     Log(String),
+    TrialLog(String),
 }
 
 impl Default for TemplateApp {
@@ -101,11 +102,7 @@ impl TemplateApp {
     }
 
     fn current_bstr(&self) -> &Xbitstr {
-        self.xs
-            .get_var_value("current-bitstr")
-            .unwrap()
-            .bitstr()
-            .unwrap()
+        self.xs.get_var_value("input").unwrap().bitstr().unwrap()
     }
 
     fn current_offset(&self) -> usize {
@@ -487,12 +484,12 @@ impl TemplateApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             let mut live_has_focus = false;
 
-             egui::containers::ScrollArea::vertical()
+            egui::containers::ScrollArea::vertical()
                 .stick_to_bottom()
                 .show(ui, |ui| {
                     for x in self.frozen_code.iter() {
                         match x {
-                            FrozenStr::Log(s) => {
+                            FrozenStr::Log(s) | FrozenStr::TrialLog(s) => {
                                 ui.colored_label(self.theme.comment, s.trim_end().to_string());
                             }
                             FrozenStr::Code(s) => {
@@ -509,7 +506,7 @@ impl TemplateApp {
                                         continue;
                                     }
                                 }
-                                ui.colored_label(self.theme.code, s.to_string());
+                                ui.colored_label(self.theme.code, s.as_str());
                             }
                         }
                     }
@@ -631,6 +628,16 @@ impl TemplateApp {
                     run_clicked = false;
                 }
             }
+            if let Some(s) = self.xs.stdout() {
+                if !s.is_empty() {
+                    let s = s.take();
+                    self.frozen_code.push(if self.is_trial() {
+                        FrozenStr::TrialLog(s)
+                    } else {
+                        FrozenStr::Log(s)
+                    });
+                }
+            }
             if next_clicked || rnext_clicked {
                 let t = Instant::now();
                 let _res = if next_clicked {
@@ -647,8 +654,15 @@ impl TemplateApp {
                 } else {
                     Xstr::from(&self.live_code)
                 };
+                let buble_log = match self.frozen_code.last() {
+                    Some(FrozenStr::TrialLog(_)) => self.frozen_code.pop(),
+                    _ => None,
+                };
                 for s in xeh::lex::XstrLines::new(xsrc.clone()) {
                     self.frozen_code.push(FrozenStr::Code(s))
+                }
+                if let Some(FrozenStr::TrialLog(log)) = buble_log {
+                    self.frozen_code.push(FrozenStr::Log(log));
                 }
                 if self.is_trial() {
                     self.snapshot();
@@ -663,12 +677,6 @@ impl TemplateApp {
                 self.debug_token = self.xs.location_from_current_ip();
                 if let Ok((w, h, buf)) = crate::canvas::copy_rgba(&mut self.xs) {
                     self.canvas.update(ctx, w, h, buf);
-                }
-            }
-            if let Some(s) = self.xs.stdout() {
-                if !s.is_empty() {
-                    let log = FrozenStr::Log(s.take());
-                    self.frozen_code.push(log);
                 }
             }
         });
@@ -723,7 +731,10 @@ impl TemplateApp {
 
     fn menu_examples(&mut self, ui: &mut Ui) {
         if ui.button("C string").clicked() {
-            self.example_request = Some((include_str!("../docs/examples/cstring.xeh"), &[]));
+            self.example_request = Some((
+                include_str!("../docs/examples/cstring.xeh"),
+                include_bytes!("../docs/examples/cstring.bin"),
+            ));
             ui.close_menu();
         }
         // if ui.button("6502 instructions").clicked() {
