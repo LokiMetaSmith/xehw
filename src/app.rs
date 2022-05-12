@@ -40,7 +40,8 @@ pub struct TemplateApp {
     help_open: bool,
     help_mode: HelpMode,
     help_words: Vec<Xstr>,
-    help_pattern: Option<String>,
+    help_filter: String,
+    help_live_cursor: Option<String>,
     theme: Theme,
     theme_editor: bool,
     example_request: Option<(&'static str, &'static [u8])>,
@@ -77,7 +78,8 @@ impl Default for TemplateApp {
             help_open: false,
             help_mode: HelpMode::Hotkeys,
             help_words: words,
-            help_pattern: None,
+            help_filter: String::new(),
+            help_live_cursor: None,
             theme: Theme::default(),
             theme_editor: false,
             example_request: None,
@@ -266,18 +268,12 @@ impl TemplateApp {
                             });
                     }
                     HelpMode::Index => {
-                        let pat = self
-                            .help_pattern
-                            .as_ref()
-                            .map(|s| s.as_bytes())
-                            .unwrap_or(&[]);
-                        let old_spacing = ui.spacing().item_spacing;
-                        ui.spacing_mut().item_spacing.y = 10.0;
+                        ui.text_edit_singleline(&mut self.help_filter);
                         ScrollArea::vertical()
                             .auto_shrink([false; 2])
                             .show(ui, |ui| {
                                 for word in &self.help_words {
-                                    if pat.is_empty() || word.as_bytes().starts_with(pat) {
+                                    if self.help_filter.is_empty() || word.starts_with(&self.help_filter) {
                                         let name = RichText::new(word.as_str())
                                             .color(self.theme.code)
                                             .background_color(self.theme.highlight);
@@ -292,7 +288,6 @@ impl TemplateApp {
                                     }
                                 }
                             });
-                        ui.spacing_mut().item_spacing = old_spacing;
                     }
                 }
             }); //help
@@ -578,7 +573,7 @@ impl TemplateApp {
                         &self.live_code,
                         code.cursor_range.map(|c| c.primary.ccursor.index),
                     );
-                    self.help_pattern = word;
+                    self.help_live_cursor = word;
                     if hotkeys::switch_to_code_pressed(&ctx.input()) || self.setup_focus {
                         code.response.request_focus();
                         self.setup_focus = false;
@@ -770,7 +765,7 @@ fn split_highlight(loc: &TokenLocation) -> (String, String, String) {
 
 impl epi::App for TemplateApp {
     fn name(&self) -> &str {
-        "eframe template"
+        "XEH"
     }
 
     /// Called once before the first frame.
