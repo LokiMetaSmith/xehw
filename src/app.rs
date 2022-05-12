@@ -328,7 +328,7 @@ impl TemplateApp {
                     }
                 }
 
-                run_clicked = ui.button(self.menu_text("Run")).clicked();
+                run_clicked = ui.button(self.menu_text("Run (Ctrl+R)")).clicked();
                 snapshot_clicked = ui
                     .add_enabled(!self.is_trial(), Button::new(self.menu_text("Snapshot")))
                     .clicked()
@@ -608,6 +608,8 @@ impl TemplateApp {
                 self.snapshot();
                 self.last_dt = Some(t.elapsed().as_secs_f64());
                 self.setup_focus = true;
+                self.frozen_code.push(FrozenStr::Log("Trial and error mode, everyting evaluating on-fly!\n\
+                Press Run or hit Ctrl+R to freeze changes.".into()));
             }
 
             if self.is_trial() {
