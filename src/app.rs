@@ -42,6 +42,7 @@ pub struct TemplateApp {
     help_words: Vec<Xstr>,
     help_filter: String,
     help_live_cursor: Option<String>,
+    help_follow_cursor: bool,
     theme: Theme,
     theme_editor: bool,
     example_request: Option<(&'static str, &'static [u8])>,
@@ -81,6 +82,7 @@ impl Default for TemplateApp {
             help_words,
             help_filter: String::new(),
             help_live_cursor: None,
+            help_follow_cursor: false,
             theme: Theme::default(),
             theme_editor: false,
             example_request: None,
@@ -268,14 +270,19 @@ impl TemplateApp {
                             });
                     }
                     HelpMode::Index => {
-                        ui.text_edit_singleline(&mut self.help_filter);
+                        ui.checkbox(&mut self.help_follow_cursor, "Follow Editor Cursor");
+                        let filter = if self.help_follow_cursor {
+                            self.help_live_cursor.as_ref()
+                        } else {
+                            ui.text_edit_singleline(&mut self.help_filter);
+                            Some(&self.help_filter)
+                        };
                         ScrollArea::vertical()
                             .auto_shrink([false; 2])
                             .show(ui, |ui| {
                                 let stack_comment = Cell::from("stack-comment");
                                 for word in &self.help_words {
-                                    
-                                    if self.help_filter.is_empty() || word.starts_with(&self.help_filter) {
+                                    if filter.is_none() || word.starts_with(filter.unwrap()) {
                                         if let Some(help) = self.xs.help_str(word) {
                                             if help == &NIL {
                                                 continue;
