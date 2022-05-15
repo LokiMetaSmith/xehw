@@ -2625,6 +2625,7 @@ dependencies = [
 name = "xeh_playground"
 version = "0.1.0"
 dependencies = [
+ "arcstr",
  "console_error_panic_hook",
  "eframe",
  "egui 0.17.0 (registry+https://github.com/rust-lang/crates.io-index)",

@@ -16,8 +16,16 @@ type BoxFuture = Box<dyn Future<Output = Vec<u8>>>;
 #[derive(PartialEq)]
 enum HelpMode {
     Hotkeys,
-    Cheatsheet,
     Index,
+}
+
+struct Help {
+    is_open: bool,
+    mode: HelpMode,
+    words: Vec<(Xstr, Cell)>,
+    filter: String,
+    live_cursor: Option<String>,
+    follow_cursor: bool,
 }
 
 pub struct TemplateApp {
@@ -37,12 +45,7 @@ pub struct TemplateApp {
     input_binary: Option<Xbitstr>,
     setup_focus: bool,
     bytecode_open: bool,
-    help_open: bool,
-    help_mode: HelpMode,
-    help_words: Vec<Xstr>,
-    help_filter: String,
-    help_live_cursor: Option<String>,
-    help_follow_cursor: bool,
+    help: Help,
     theme: Theme,
     theme_editor: bool,
     example_request: Option<(&'static str, &'static [u8])>,
@@ -55,11 +58,12 @@ enum FrozenStr {
     TrialLog(String),
 }
 
+const SECTION_TAG: Cell = Cell::Str(arcstr::literal!("section"));
+const STACK_TAG: Cell = Cell::Str(arcstr::literal!("stack-comment"));
+
 impl Default for TemplateApp {
     fn default() -> Self {
-        let mut xs = Self::xs_respawn();
-        xs.eval(include_str!("../../xeh/docs/help.xs")).unwrap();
-        let help_words = xs.word_list();
+        let xs = Self::xs_respawn();
         Self {
             xs,
             start_row: 0,
@@ -77,12 +81,14 @@ impl Default for TemplateApp {
             setup_focus: true,
             rdebug_enabled: false,
             bytecode_open: false,
-            help_open: false,
-            help_mode: HelpMode::Hotkeys,
-            help_words,
-            help_filter: String::new(),
-            help_live_cursor: None,
-            help_follow_cursor: false,
+            help: Help {
+                is_open: false,
+                mode: HelpMode::Hotkeys,
+                words: Vec::new(),
+                filter: String::new(),
+                live_cursor: None,
+                follow_cursor: false,
+            },
             theme: Theme::default(),
             theme_editor: false,
             example_request: None,
@@ -96,6 +102,19 @@ impl TemplateApp {
         xs.intercept_stdout(true);
         xeh::d2_plugin::load(&mut xs).unwrap();
         xs
+    }
+
+    fn load_help(&mut self) {
+        self.xs.eval(include_str!("../../xeh/docs/help.xs")).unwrap();
+        let words = self.xs.word_list().into_iter().filter_map(|name| {
+            let s = self.xs.help_str(&name).unwrap_or(&NIL);
+            if s != &NIL {
+                Some((name, s.clone()))
+            } else {
+                None
+            }
+        }).collect();
+        self.help.words = words;
     }
 
     fn move_view(&mut self, nrows: isize) {
@@ -212,27 +231,22 @@ impl TemplateApp {
 
         let help_pos = pos2(win_rect.width() * 0.25, win_rect.height() * 0.25);
         egui::Window::new("Help")
-            .open(&mut self.help_open)
+            .open(&mut self.help.is_open)
             .default_pos(help_pos)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.selectable_value(
-                        &mut self.help_mode,
+                        &mut self.help.mode,
                         HelpMode::Hotkeys,
                         RichText::new("Hotkeys").heading(),
                     );
                     ui.selectable_value(
-                        &mut self.help_mode,
-                        HelpMode::Cheatsheet,
-                        RichText::new("Cheatsheet").heading(),
-                    );
-                    ui.selectable_value(
-                        &mut self.help_mode,
+                        &mut self.help.mode,
                         HelpMode::Index,
                         RichText::new("Index").heading(),
                     );
                 });
-                match self.help_mode {
+                match self.help.mode {
                     HelpMode::Hotkeys => {
                         let add = |ui: &mut Ui, text, combo| {
                             ui.horizontal(|ui| {
@@ -262,49 +276,50 @@ impl TemplateApp {
                                 );
                             });
                     }
-                    HelpMode::Cheatsheet => {
-                        ScrollArea::vertical()
-                            .auto_shrink([false; 2])
-                            .show(ui, |ui| {
-                                ui.heading("Todo");
-                            });
-                    }
                     HelpMode::Index => {
-                        ui.checkbox(&mut self.help_follow_cursor, "Follow Editor Cursor");
-                        let filter = if self.help_follow_cursor {
-                            self.help_live_cursor.as_ref()
-                        } else {
-                            ui.text_edit_singleline(&mut self.help_filter);
-                            Some(&self.help_filter)
-                        };
+                        ui.horizontal(|ui| {
+                            let edit = TextEdit::singleline(&mut self.help.filter);
+                            ui.add_enabled(!self.help.follow_cursor, edit);
+                            ui.checkbox(&mut self.help.follow_cursor, "Follow Editor Cursor");
+                        });
+                        let filter = if self.help.follow_cursor {
+                                self.help.live_cursor.as_ref().map(|s|s.as_str()).unwrap_or("")
+                            } else {
+                                self.help.filter.as_str()
+                            }.trim();
+                        self.help.words.sort_by(|a,b| a.0.cmp(&b.0));
+                        let mut new_filter = None;
                         ScrollArea::vertical()
                             .auto_shrink([false; 2])
                             .show(ui, |ui| {
-                                let stack_comment = Cell::from("stack-comment");
-                                for word in &self.help_words {
-                                    if filter.is_none() || word.starts_with(filter.unwrap()) {
-                                        if let Some(help) = self.xs.help_str(word) {
-                                            if help == &NIL {
-                                                continue;
+                                for (word, help) in &self.help.words {
+                                    let section = help.get_tagged(&SECTION_TAG).and_then(|s| s.str().ok()).unwrap_or("");
+                                    if filter.is_empty() || word.as_str().starts_with(filter) ||  section.starts_with(filter) {
+                                        ui.horizontal(|ui| {
+                                            let heading = RichText::new(word.as_str())
+                                                .color(self.theme.code)
+                                                .background_color(self.theme.highlight);
+                                            ui.monospace(heading);
+                                            if let Some(t) = help.get_tagged(&STACK_TAG) {
+                                                ui.colored_label(self.theme.comment, format!(" # ( {:?} ) ", t));
                                             }
-                                            ui.horizontal(|ui| {
-                                                let heading = RichText::new(word.as_str())
-                                                    .color(self.theme.code)
-                                                    .background_color(self.theme.highlight);
-                                                ui.monospace(heading);
-                                                if let Some(t) = help.get_tagged(&stack_comment) {
-                                                    ui.colored_label(self.theme.comment, format!(" # ( {:?} )", t));
+                                            if !section.is_empty() {
+                                                if ui.button(RichText::new(section).color(self.theme.selection)).clicked() {
+                                                    new_filter = Some(section.to_string());
                                                 }
-                                            });
-                                            ui.horizontal(|ui| {
-                                                if let Ok(s) = help.str() {
-                                                    ui.label(s);
-                                                }
-                                            });
-                                        }
+                                            }
+                                        });
+                                        ui.horizontal(|ui| {
+                                            if let Ok(s) = help.str() {
+                                                ui.label(s);
+                                            }
+                                        });
                                     }
                                 }
                             });
+                        if let Some(s) = new_filter {
+                            self.help.filter = s;
+                        }
                     }
                 }
             }); //help
@@ -383,7 +398,7 @@ impl TemplateApp {
                         || next_pressed(ui);
                 }
                 if ui.button(self.menu_text("Help (Ctrl+G)")).clicked() || help_pressed(ui) {
-                    self.help_open = !self.help_open;
+                    self.help.is_open = !self.help.is_open;
                 }
                 ui.menu_button("Examples", |ui| {
                     self.menu_examples(ui);
@@ -590,7 +605,7 @@ impl TemplateApp {
                         &self.live_code,
                         code.cursor_range.map(|c| c.primary.ccursor.index),
                     );
-                    self.help_live_cursor = word;
+                    self.help.live_cursor = word;
                     if hotkeys::switch_to_code_pressed(&ctx.input()) || self.setup_focus {
                         code.response.request_focus();
                         self.setup_focus = false;
@@ -785,6 +800,10 @@ impl epi::App for TemplateApp {
         "XEH"
     }
 
+    fn clear_color(&self) -> egui::Rgba {
+        egui::Rgba::from_rgba_premultiplied(0.0, 0.0, 0.0, 1.0)
+    }
+
     /// Called once before the first frame.
     fn setup(
         &mut self,
@@ -796,6 +815,7 @@ impl epi::App for TemplateApp {
         if let Some(storage) = storage {
             self.theme = epi::get_value(storage, epi::APP_KEY).unwrap_or_default()
         }
+        self.load_help();
     }
 
     /// Called by the frame work to save state before shutdown.
