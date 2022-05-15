@@ -56,8 +56,9 @@ enum FrozenStr {
 
 impl Default for TemplateApp {
     fn default() -> Self {
-        let xs = Self::xs_respawn();
-        let words = xs.word_list();
+        let mut xs = Self::xs_respawn();
+        xs.eval(include_str!("../../xeh/docs/help.xs")).unwrap();
+        let help_words = xs.word_list();
         Self {
             xs,
             start_row: 0,
@@ -77,7 +78,7 @@ impl Default for TemplateApp {
             bytecode_open: false,
             help_open: false,
             help_mode: HelpMode::Hotkeys,
-            help_words: words,
+            help_words,
             help_filter: String::new(),
             help_live_cursor: None,
             theme: Theme::default(),
@@ -92,7 +93,6 @@ impl TemplateApp {
         let mut xs = Xstate::boot().unwrap();
         xs.intercept_stdout(true);
         xeh::d2_plugin::load(&mut xs).unwrap();
-        xs.eval(include_str!("../../xeh/docs/help.xs")).unwrap();
         xs
     }
 
@@ -272,13 +272,23 @@ impl TemplateApp {
                         ScrollArea::vertical()
                             .auto_shrink([false; 2])
                             .show(ui, |ui| {
+                                let stack_comment = Cell::from("stack-comment");
                                 for word in &self.help_words {
+                                    
                                     if self.help_filter.is_empty() || word.starts_with(&self.help_filter) {
-                                        let name = RichText::new(word.as_str())
-                                            .color(self.theme.code)
-                                            .background_color(self.theme.highlight);
-                                        ui.monospace(name);
                                         if let Some(help) = self.xs.help_str(word) {
+                                            if help == &NIL {
+                                                continue;
+                                            }
+                                            ui.horizontal(|ui| {
+                                                let heading = RichText::new(word.as_str())
+                                                    .color(self.theme.code)
+                                                    .background_color(self.theme.highlight);
+                                                ui.monospace(heading);
+                                                if let Some(t) = help.get_tagged(&stack_comment) {
+                                                    ui.colored_label(self.theme.comment, format!(" # ( {:?} )", t));
+                                                }
+                                            });
                                             ui.horizontal(|ui| {
                                                 if let Ok(s) = help.str() {
                                                     ui.label(s);
