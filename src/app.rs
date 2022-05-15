@@ -1,8 +1,8 @@
 use eframe::egui::*;
 use eframe::{egui, epi};
 
-use crate::{canvas::*, layouter};
 use crate::hotkeys::*;
+use crate::{canvas::*, layouter};
 use crate::{hotkeys, style::*};
 use xeh::prelude::*;
 
@@ -105,15 +105,22 @@ impl TemplateApp {
     }
 
     fn load_help(&mut self) {
-        self.xs.eval(include_str!("../../xeh/docs/help.xs")).unwrap();
-        let words = self.xs.word_list().into_iter().filter_map(|name| {
-            let s = self.xs.help_str(&name).unwrap_or(&NIL);
-            if s != &NIL {
-                Some((name, s.clone()))
-            } else {
-                None
-            }
-        }).collect();
+        self.xs
+            .eval(include_str!("../../xeh/docs/help.xs"))
+            .unwrap();
+        let words = self
+            .xs
+            .word_list()
+            .into_iter()
+            .filter_map(|name| {
+                let s = self.xs.help_str(&name).unwrap_or(&NIL);
+                if s != &NIL {
+                    Some((name, s.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
         self.help.words = words;
     }
 
@@ -283,28 +290,48 @@ impl TemplateApp {
                             ui.checkbox(&mut self.help.follow_cursor, "Follow Editor Cursor");
                         });
                         let filter = if self.help.follow_cursor {
-                                self.help.live_cursor.as_ref().map(|s|s.as_str()).unwrap_or("")
-                            } else {
-                                self.help.filter.as_str()
-                            }.trim();
-                        self.help.words.sort_by(|a,b| a.0.cmp(&b.0));
+                            self.help
+                                .live_cursor
+                                .as_ref()
+                                .map(|s| s.as_str())
+                                .unwrap_or("")
+                        } else {
+                            self.help.filter.as_str()
+                        }
+                        .trim();
+                        self.help.words.sort_by(|a, b| a.0.cmp(&b.0));
                         let mut new_filter = None;
                         ScrollArea::vertical()
                             .auto_shrink([false; 2])
                             .show(ui, |ui| {
                                 for (word, help) in &self.help.words {
-                                    let section = help.get_tagged(&SECTION_TAG).and_then(|s| s.str().ok()).unwrap_or("");
-                                    if filter.is_empty() || word.as_str().starts_with(filter) ||  section.starts_with(filter) {
+                                    let section = help
+                                        .get_tagged(&SECTION_TAG)
+                                        .and_then(|s| s.str().ok())
+                                        .unwrap_or("");
+                                    if filter.is_empty()
+                                        || word.as_str().starts_with(filter)
+                                        || section.starts_with(filter)
+                                    {
                                         ui.horizontal(|ui| {
                                             let heading = RichText::new(word.as_str())
                                                 .color(self.theme.code)
                                                 .background_color(self.theme.highlight);
                                             ui.monospace(heading);
                                             if let Some(t) = help.get_tagged(&STACK_TAG) {
-                                                ui.colored_label(self.theme.comment, format!(" # ( {:?} ) ", t));
+                                                ui.colored_label(
+                                                    self.theme.comment,
+                                                    format!(" # ( {:?} ) ", t),
+                                                );
                                             }
                                             if !section.is_empty() {
-                                                if ui.button(RichText::new(section).color(self.theme.selection)).clicked() {
+                                                if ui
+                                                    .button(
+                                                        RichText::new(section)
+                                                            .color(self.theme.selection),
+                                                    )
+                                                    .clicked()
+                                                {
                                                     new_filter = Some(section.to_string());
                                                 }
                                             }
@@ -635,8 +662,11 @@ impl TemplateApp {
                 self.snapshot();
                 self.last_dt = Some(t.elapsed().as_secs_f64());
                 self.setup_focus = true;
-                self.frozen_code.push(FrozenStr::Log("Trial and error mode, everyting evaluating on-fly!\n\
-                Press Run or hit Ctrl+R to freeze changes.".into()));
+                self.frozen_code.push(FrozenStr::Log(
+                    "Trial and error mode, everyting evaluating on-fly!\n\
+                Press Run or hit Ctrl+R to freeze changes."
+                        .into(),
+                ));
             }
 
             if self.is_trial() {
