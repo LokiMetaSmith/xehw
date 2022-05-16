@@ -60,6 +60,7 @@ enum FrozenStr {
 
 const SECTION_TAG: Cell = Cell::Str(arcstr::literal!("section"));
 const STACK_TAG: Cell = Cell::Str(arcstr::literal!("stack-comment"));
+const EXAMPLE_TAG: Cell = Cell::Str(arcstr::literal!("example"));
 
 impl Default for TemplateApp {
     fn default() -> Self {
@@ -315,8 +316,7 @@ impl TemplateApp {
                                     {
                                         ui.horizontal(|ui| {
                                             let heading = RichText::new(word.as_str())
-                                                .color(self.theme.code)
-                                                .background_color(self.theme.highlight);
+                                                .color(self.theme.selection);
                                             ui.monospace(heading);
                                             if let Some(t) = help.get_tagged(&STACK_TAG) {
                                                 ui.colored_label(
@@ -325,22 +325,30 @@ impl TemplateApp {
                                                 );
                                             }
                                             if !section.is_empty() {
-                                                if ui
-                                                    .button(
-                                                        RichText::new(section)
-                                                            .color(self.theme.selection),
-                                                    )
-                                                    .clicked()
-                                                {
+                                                let name = RichText::new(section)
+                                                    .color(self.theme.selection).underline();
+                                                if ui.button(name).clicked() {
                                                     new_filter = Some(section.to_string());
                                                 }
                                             }
                                         });
-                                        ui.horizontal(|ui| {
-                                            if let Ok(s) = help.str() {
-                                                ui.label(s);
+                                        if let Ok(s) = help.str() {
+                                            ui.label(s);
+                                        }
+                                        if let Some(v) = help.tag().and_then(|t| t.vec().ok()) {
+                                            for i in v.iter() {
+                                                if i.tag() == Some(&EXAMPLE_TAG) {
+                                                    let s = i.str().ok().unwrap_or("");
+                                                    let example = RichText::new(s).color(self.theme.code).background_color(self.theme.highlight);
+                                                    ui.separator();
+                                                    ui.horizontal(|ui| {
+                                                        ui.separator();
+                                                        ui.monospace(example);
+                                                    });
+                                                }
                                             }
-                                        });
+                                        }
+                                        ui.separator();
                                     }
                                 }
                             });
