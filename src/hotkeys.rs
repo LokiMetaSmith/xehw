@@ -1,7 +1,7 @@
 use eframe::{egui, egui::*};
 
 pub fn interactive_canvas_pressed(ctx: &egui::Context) -> bool {
-    ctx.input().modifiers.ctrl && ctx.input().key_pressed(Key::M)
+    ctx.input().modifiers.ctrl && ctx.input().key_pressed(Key::Num4)
 }
 
 pub fn scroll_view_pressed(ctx: &egui::Context, page_size: isize) -> isize {

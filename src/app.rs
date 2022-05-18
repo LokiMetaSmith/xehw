@@ -38,6 +38,7 @@ pub struct TemplateApp {
     frozen_code: Vec<FrozenStr>,
     last_dt: Option<f64>,
     canvas: Canvas,
+    canvas_open: bool,
     debug_token: Option<TokenLocation>,
     rdebug_enabled: bool,
     snapshot: Option<(Xstate, Vec<FrozenStr>)>,
@@ -76,6 +77,7 @@ impl Default for TemplateApp {
             last_dt: None,
             debug_token: None,
             canvas: Canvas::new(),
+            canvas_open: false,
             snapshot: None,
             bin_future: None,
             input_binary: None,
@@ -237,6 +239,13 @@ impl TemplateApp {
                 });
             });
 
+        if crate::hotkeys::interactive_canvas_pressed(ctx) {
+            self.canvas_open = !self.canvas_open;
+        }
+        Window::new("Canvas").open(&mut self.canvas_open).default_size(self.canvas.size()).resizable(true).show(ctx, |ui| {
+            self.canvas.ui(ui, &self.theme);
+        }); 
+
         let help_pos = pos2(win_rect.width() * 0.25, win_rect.height() * 0.25);
         egui::Window::new("Help")
             .open(&mut self.help.is_open)
@@ -273,9 +282,9 @@ impl TemplateApp {
                                 add(ui, "Debugger - Next", "(Ctrl + B)");
                                 add(ui, "Debugger - Reverse Next", "(Ctrl + N)");
                                 add(ui, "Debugger - Toggle Reverse Next Recording", "(Ctrl + Y)");
-                                add(ui, "Canvas - Show", "(Ctrl + M)");
                                 add(ui, "Switch to Hex Panel", "(Ctrl + 1)");
                                 add(ui, "Switch to Code Panel", "(Ctrl + 2)");
+                                add(ui, "Canvas - Show", "(Ctrl + 4)");
                                 add(ui, "Help - Show", "(Ctrl + G)");
                                 ui.heading("Mouse");
                                 ui.colored_label(
@@ -748,9 +757,13 @@ impl TemplateApp {
                 self.live_code.clear();
                 self.last_dt = Some(t.elapsed().as_secs_f64());
             }
-            if next_clicked || rnext_clicked || run_clicked || rollback_clicked {
+            if next_clicked || rnext_clicked || run_clicked || rollback_clicked ||
+            (self.is_trial() && has_some_code) {
                 self.debug_token = self.xs.location_from_current_ip();
                 if let Ok((w, h, buf)) = crate::canvas::copy_rgba(&mut self.xs) {
+                    if self.canvas.is_empty() {
+                        self.canvas_open = true;
+                    }
                     self.canvas.update(ctx, w, h, buf);
                 }
             }
@@ -878,13 +891,6 @@ impl epi::App for TemplateApp {
             self.binary_dropped(Xbitstr::from(data));
             self.live_code = code.to_string();
         }
-        if crate::hotkeys::interactive_canvas_pressed(ctx) {
-            self.canvas.interactive = !self.canvas.interactive;
-        }
-        if self.canvas.interactive() {
-            self.canvas.ui(ctx);
-        } else {
-            self.editor(ctx);
-        }
+        self.editor(ctx);
     }
 }
