@@ -81,11 +81,11 @@ pub fn code_layouter(
             format: TextFormat {
                 font_id: font_id.clone(),
                 color: theme.code,
-                background: if dbg == 1 {
+                underline: egui::Stroke::new(1.0, if dbg == 1 {
                     theme.debug_marker
                 } else {
                     theme.error
-                },
+                }),
                 ..Default::default()
             },
         });

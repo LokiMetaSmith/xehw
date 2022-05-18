@@ -230,7 +230,7 @@ impl TemplateApp {
                             .monospace()
                             .color(self.theme.text);
                         if ip == self.xs.ip() {
-                            rich = rich.background_color(self.theme.highlight);
+                            rich = rich.background_color(self.theme.border);
                         }
                         ui.label(rich);
                     }
@@ -259,7 +259,7 @@ impl TemplateApp {
                         let add = |ui: &mut Ui, text, combo| {
                             ui.horizontal(|ui| {
                                 ui.colored_label(self.theme.text, text);
-                                ui.colored_label(self.theme.debug_marker, combo);
+                                ui.colored_label(self.theme.selection, combo);
                             });
                         };
                         ScrollArea::vertical()
@@ -286,8 +286,10 @@ impl TemplateApp {
                     }
                     HelpMode::Index => {
                         ui.horizontal(|ui| {
+                            ui.style_mut().visuals.extreme_bg_color = self.theme.code_background;
                             let edit = TextEdit::singleline(&mut self.help.filter);
                             ui.add_enabled(!self.help.follow_cursor, edit);
+                            ui.style_mut().visuals.extreme_bg_color = self.theme.border;
                             ui.checkbox(&mut self.help.follow_cursor, "Follow Editor Cursor");
                         });
                         let filter = if self.help.follow_cursor {
@@ -339,7 +341,7 @@ impl TemplateApp {
                                             for i in v.iter() {
                                                 if i.tag() == Some(&EXAMPLE_TAG) {
                                                     let s = i.str().ok().unwrap_or("");
-                                                    let example = RichText::new(s).color(self.theme.code).background_color(self.theme.highlight);
+                                                    let example = RichText::new(s).color(self.theme.code_frozen).background_color(self.theme.code_background);
                                                     ui.separator();
                                                     ui.horizontal(|ui| {
                                                         ui.separator();
@@ -390,7 +392,9 @@ impl TemplateApp {
                     }
                 }
 
-                run_clicked = ui.button(self.menu_text("Run (Ctrl+R)")).clicked();
+                if ui.button(self.menu_text("Run (Ctrl+R)")).clicked() || run_pressed(ui) {
+                    run_clicked = true;
+                }
                 snapshot_clicked = ui
                     .add_enabled(!self.is_trial(), Button::new(self.menu_text("Snapshot")))
                     .clicked()
@@ -482,11 +486,10 @@ impl TemplateApp {
                         for i in 0..self.num_cols {
                             if let Some((val, n)) = it.next() {
                                 let hex_data = RichText::new(format!(" {:02x}", val))
-                                    .color(self.theme.text)
-                                    .background_color(if from < offset {
-                                        self.theme.highlight
+                                    .color(if from < offset {
+                                        self.theme.code_frozen
                                     } else {
-                                        Color32::TRANSPARENT
+                                        self.theme.code
                                     });
                                 ui.label(hex_data);
                                 let c = xeh::bitstr_ext::byte_to_dump_char(val);
@@ -499,11 +502,11 @@ impl TemplateApp {
                                     pad.push_str("   ");
                                     ascii.push(' ');
                                 }
-                                ui.colored_label(self.theme.text, pad);
+                                ui.colored_label(self.theme.comment, pad);
                                 break;
                             }
                         }
-                        ui.colored_label(self.theme.text, ascii);
+                        ui.colored_label(self.theme.comment, ascii);
                     });
                     *ui.spacing_mut() = spacing;
                 }
@@ -517,7 +520,7 @@ impl TemplateApp {
             let v = resp.drag_delta();
             self.move_view(v.y as isize);
 
-            ui.colored_label(self.theme.comment, "Data Stack:");
+            ui.colored_label(self.theme.comment, "Stack:");
 
             egui::containers::ScrollArea::vertical().show(ui, |ui| {
                 ui.set_min_width(size1.x);
@@ -529,9 +532,14 @@ impl TemplateApp {
                             s.truncate(ncols as usize - 3);
                             s.push_str("...");
                         }
+                        let color = if i < self.xs.data_depth() {
+                            self.theme.code
+                        } else {
+                            self.theme.code_frozen
+                        };
                         ui.horizontal(|ui| {
                             ui.colored_label(self.theme.comment, format!("{:6}:", i));
-                            ui.colored_label(self.theme.text, s);
+                            ui.colored_label(color, s);
                         });
                     } else {
                         break;
@@ -549,6 +557,8 @@ impl TemplateApp {
             egui::containers::ScrollArea::vertical()
                 .stick_to_bottom()
                 .show(ui, |ui| {
+                    let old_spacing = ui.spacing_mut().item_spacing;
+                    ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
                     for x in self.frozen_code.iter() {
                         match x {
                             FrozenStr::Log(s) | FrozenStr::TrialLog(s) => {
@@ -568,10 +578,11 @@ impl TemplateApp {
                                         continue;
                                     }
                                 }
-                                ui.colored_label(self.theme.code, s.as_str());
+                                ui.colored_label(self.theme.code_frozen, s.as_str());
                             }
                         }
                     }
+                    ui.spacing_mut().item_spacing = old_spacing;
                     let show_trial_error = self.is_trial()
                         && self.xs.last_error().is_some()
                         && self.live_code.trim().len() > 0;
@@ -581,7 +592,7 @@ impl TemplateApp {
                         if let Some(err) = self.xs.last_error() {
                             if show_trial_error {
                                 let s = format!("ERROR: {}", err);
-                                ui.colored_label(self.theme.text, s);
+                                ui.colored_label(self.theme.error, s);
                             }
                         } else {
                             let mut s = String::new();
@@ -631,11 +642,11 @@ impl TemplateApp {
                         .desired_rows(1)
                         .desired_width(f32::INFINITY)
                         .code_editor()
-                        .margin(vec2(1.0, 1.0))
+                        .margin(vec2(4.0, 2.0))
                         .id(code_id)
                         .layouter(&mut layouter)
                         .show(ui);
-                    ui.style_mut().visuals.extreme_bg_color = self.theme.scroll;
+                    ui.style_mut().visuals.extreme_bg_color = self.theme.border;
                     let word = layouter::word_under_cursor(
                         &self.live_code,
                         code.cursor_range.map(|c| c.primary.ccursor.index),
@@ -646,9 +657,6 @@ impl TemplateApp {
                         self.setup_focus = false;
                     }
                     live_has_focus = code.response.has_focus();
-                    if live_has_focus && run_pressed(ui) {
-                        run_clicked = true;
-                    }
                 });
 
             let has_some_code = !self.live_code.trim().is_empty();
@@ -761,13 +769,12 @@ impl TemplateApp {
 
     fn ui_error_highlight(&self, ui: &mut Ui, loc: &TokenLocation, err: &Xerr) {
         let (a, b, c) = split_highlight(loc);
-        ui.spacing_mut().item_spacing.x = 0.0;
-        ui.horizontal_top(|ui| {
+        ui.horizontal(|ui| {
             ui.label(RichText::new(a).monospace().color(self.theme.code));
             ui.label(
                 RichText::new(b)
                     .monospace()
-                    .background_color(self.theme.error),
+                    .color(self.theme.error),
             );
             ui.label(RichText::new(c).monospace().color(self.theme.code));
         });
@@ -784,13 +791,12 @@ impl TemplateApp {
 
     fn ui_debugger_highlight(&self, ui: &mut Ui, loc: &TokenLocation) {
         let (a, b, c) = split_highlight(loc);
-        ui.spacing_mut().item_spacing.x = 0.0;
         ui.horizontal_top(|ui| {
             ui.label(RichText::new(a).monospace().color(self.theme.code));
             ui.label(
                 RichText::new(b)
                     .monospace()
-                    .background_color(self.theme.debug_marker),
+                    .color(self.theme.debug_marker),
             );
             ui.label(RichText::new(c).monospace().color(self.theme.code));
         });
