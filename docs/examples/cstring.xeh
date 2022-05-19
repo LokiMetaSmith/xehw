@@ -1,4 +1,2 @@
-
 # read bytes until zero
 [ begin u8 zero? until ] println
-
