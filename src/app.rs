@@ -5,6 +5,7 @@ use crate::hotkeys::*;
 use crate::{canvas::*, layouter};
 use crate::{hotkeys, style::*};
 use xeh::prelude::*;
+use std::fmt::Write;
 
 #[cfg(target_arch = "wasm32")]
 type Instant = instant::Instant;
@@ -130,8 +131,27 @@ impl TemplateApp {
     fn move_view(&mut self, nrows: isize) {
         let n = (self.start_row + nrows)
             .max(0)
-            .min(self.current_bstr().end() as isize / (self.num_cols * 8));
+            .min(self.last_row_index());
         self.start_row = n.max(0);
+    }
+
+    fn last_row_index(&self) -> isize {
+        let e = self.current_bstr().end();
+        let bits_per_row = self.num_cols as usize * 8;
+        let i = (e / bits_per_row) as isize;
+        if e == (i as usize * bits_per_row) {
+            (i - 1).max(0)
+        } else {
+            i
+        }
+    }
+
+    fn current_row_index(&self) -> isize {
+        self.current_offset() as isize / (self.num_cols * 8)
+    }
+
+    fn goto_row(&mut self, row: isize) {
+        self.start_row = row;
     }
 
     fn current_bstr(&self) -> &Xbitstr {
@@ -192,13 +212,13 @@ impl TemplateApp {
         }
     }
 
-    fn hex_offset_str(&self, offset: usize, _end: usize, sep: char) -> String {
+    fn hex_offset_str(&self, offset: usize, _end: usize) -> String {
         let a = offset / 8;
         let b = offset % 8;
         if b == 0 {
-            format!("{:06x}{}", a, sep)
+            format!("{:06x}", a)
         } else {
-            format!("{:06x}.{}{}", a, b, sep)
+            format!("{:06x}.{}", a, b)
         }
     }
 
@@ -474,17 +494,26 @@ impl TemplateApp {
                 let mut it = bs.iter8();
                 let visible_bits = self.num_rows * self.num_cols * 8;
                 let to = bs.end().min(from + visible_bits as usize);
-
-                ui.set_min_height(size1.y);
-                let header = self.hex_offset_str(offset, bs.end(), ' ');
-                ui.colored_label(self.theme.comment, header);
+                ui.spacing_mut().item_spacing = vec2(0.0, 2.0);
+                ui.spacing_mut().interact_size = vec2(0.0, 0.0);
+                
+                ui.horizontal(|ui| {
+                    let hdr_text = self.hex_offset_str(offset, bs.end());
+                    let hdr = Label::new(RichText::new(hdr_text).color(self.theme.selection).underline()).sense(Sense::click());
+                    if ui.add(hdr).clicked() {
+                        self.goto_row(self.current_row_index());
+                    }
+                    let mut ruler = String::new();
+                    for i in 0..self.num_cols {
+                        write!(ruler, " {:02x}", i).unwrap();
+                    }
+                    ui.colored_label(self.theme.comment, ruler);
+                });
 
                 for _ in 0..self.num_rows {
-                    let spacing = ui.spacing_mut().clone();
-                    ui.spacing_mut().item_spacing.x = 0.0;
-                    ui.spacing_mut().item_spacing.y = 0.0;
-                    let addr_text = self.hex_offset_str(from, bs.end(), ':');
+                    let mut addr_text = self.hex_offset_str(from, bs.end());
                     if from >= to {
+                        addr_text.push(':');
                         ui.colored_label(self.theme.comment, addr_text);
                         continue;
                     }
@@ -517,11 +546,11 @@ impl TemplateApp {
                         }
                         ui.colored_label(self.theme.comment, ascii);
                     });
-                    *ui.spacing_mut() = spacing;
                 }
-                if bs.len() > 0 {
-                    let footer = self.hex_offset_str(bs.end(), bs.len(), ' ');
-                    ui.colored_label(self.theme.comment, footer);
+                let end_offs = RichText::new(self.hex_offset_str(bs.end(), bs.len())).color(self.theme.selection).underline();
+                let end_url = Label::new(end_offs).sense(Sense::click());
+                if ui.add(end_url).clicked() {
+                    self.goto_row(self.last_row_index());
                 }
             });
 
@@ -597,7 +626,6 @@ impl TemplateApp {
                         && self.live_code.trim().len() > 0;
                     {
                         // mini status
-                        use std::fmt::Write;
                         if let Some(err) = self.xs.last_error() {
                             if show_trial_error {
                                 let s = format!("ERROR: {}", err);
@@ -816,13 +844,20 @@ impl TemplateApp {
     }
 
     fn menu_examples(&mut self, ui: &mut Ui) {
-        if ui.button("C string").clicked() {
+        if ui.button("C String").clicked() {
             self.example_request = Some((
                 include_str!("../docs/examples/cstring.xeh"),
                 include_bytes!("../docs/examples/cstring.bin"),
             ));
             ui.close_menu();
         }
+        // if ui.button("iNES ROM").clicked() {
+        //     self.example_request = Some((
+        //         include_str!("../docs/examples/ines.xeh"),
+        //         include_bytes!("../docs/examples/smb.nes"),
+        //     ));
+        //     ui.close_menu();
+        // }
         // if ui.button("6502 instructions").clicked() {
         //     self.example_request = Some(include_str!("docs/ex/6502.xeh"),
         //                                    include_bytes!("docs/ex/6502.bin"));

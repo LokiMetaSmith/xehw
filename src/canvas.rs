@@ -31,7 +31,7 @@ impl Canvas {
         let size = self.size();
         ui.horizontal(|ui| {
             ui.colored_label(theme.comment, format!("{}x{}", size.x, size.y));
-            ui.add(Slider::new(&mut self.zoom, 0.1..=10.0).text("zoom").text_color(theme.comment));
+            ui.add(Slider::new(&mut self.zoom, 0.1..=16.0).text("zoom").text_color(theme.comment));
         });
         if let Some(texture) = self.tex.as_ref() {
             let size = texture.size_vec2();
