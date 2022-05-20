@@ -110,7 +110,7 @@ impl TemplateApp {
 
     fn load_help(&mut self) {
         self.xs
-            .eval(include_str!("../../xeh/docs/help.xs"))
+            .eval(include_str!("../../xeh/docs/help.xeh"))
             .unwrap();
         let words = self
             .xs
