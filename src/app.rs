@@ -851,6 +851,13 @@ impl TemplateApp {
             ));
             ui.close_menu();
         }
+        if ui.button("Gameboy Tile 2BPP").clicked() {
+            self.example_request = Some((
+                include_str!("../docs/examples/gb-tile-2bpp.xeh"),
+                include_bytes!("../docs/examples/gb-tile-2bpp.bin"),
+            ));
+            ui.close_menu();
+        }
         // if ui.button("iNES ROM").clicked() {
         //     self.example_request = Some((
         //         include_str!("../docs/examples/ines.xeh"),

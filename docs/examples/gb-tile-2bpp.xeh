@@ -1,0 +1,24 @@
+
+: read-2bpp-row
+	[ 8 0 do 1 uint loop ] local plane1
+	[ 8 0 do 1 uint loop ] local plane2
+	8 0 do
+		plane1 I get
+		plane2 I get 1 bit-shl
+		bit-or
+	loop
+;
+
+8 8 d2-resize
+d2-clear
+ 
+[ 0xE4F7D3ff 0x94bf76ff 0x416757ff 0x0e171fff ] d2-palette!
+
+8 0 do
+	read-2bpp-row
+	8 0 do
+		d2-color!
+		7 I - J d2-data! 
+	loop
+	newline
+loop
