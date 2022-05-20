@@ -12,7 +12,7 @@
 8 8 d2-resize
 d2-clear
  
-[ 0xE4F7D3ff 0x94bf76ff 0x416757ff 0x0e171fff ] d2-palette!
+[ 0xE4F7D3 0x94bf76 0x416757 0x0e171f ] d2-palette!
 
 8 0 do
 	read-2bpp-row
