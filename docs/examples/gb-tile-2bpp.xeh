@@ -20,5 +20,4 @@ d2-clear
 		d2-color!
 		7 I - J d2-data! 
 	loop
-	newline
 loop
