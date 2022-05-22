@@ -1,2 +1,2 @@
 # read bytes until zero
-[ begin u8 zero? until ] println
+[ begin u8 dup zero? until ] println

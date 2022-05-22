@@ -1,0 +1,21 @@
+[ "NES" 0x1a ] magic var hdr
+u8 var prg-len
+u8 var chr-len
+u8 var flags6
+u8 var flags7
+u8 var flags8
+u8 var flags9
+u8 var flags10
+5 8 * bitstr var reserved2
+
+flags6 0b100 bit-and zero? if
+    0
+else
+    512 8 *
+endif
+bitstr var tainer-data
+
+offset var prg-offset
+prg-len 16384 * 8 * bitstr var prg-data
+offset var chr-offset
+chr-len 8192 * 8 * bitstr var chr-data

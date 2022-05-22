@@ -859,13 +859,14 @@ impl TemplateApp {
             ));
             ui.close_menu();
         }
-        // if ui.button("iNES ROM").clicked() {
-        //     self.example_request = Some((
-        //         include_str!("../docs/examples/ines.xeh"),
-        //         include_bytes!("../docs/examples/smb.nes"),
-        //     ));
-        //     ui.close_menu();
-        // }
+        if ui.button("iNES ROM").clicked() {
+            self.example_request = Some((
+                include_str!("../docs/examples/ines.xeh"),
+                &[],
+                //include_bytes!("../docs/examples/smb.nes"),
+            ));
+            ui.close_menu();
+        }
         // if ui.button("6502 instructions").clicked() {
         //     self.example_request = Some(include_str!("docs/ex/6502.xeh"),
         //                                    include_bytes!("docs/ex/6502.bin"));
