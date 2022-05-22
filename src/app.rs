@@ -183,6 +183,7 @@ impl TemplateApp {
     fn reload_state(&mut self) {
         let buf = self.collect_frozen_code();
         self.xs = Self::xs_respawn();
+        self.canvas = Canvas::new();
         self.live_code = buf;
         self.frozen_code.clear();
         if let Some(bin) = &self.input_binary {
