@@ -18,6 +18,7 @@ type BoxFuture = Box<dyn Future<Output = Vec<u8>>>;
 enum HelpMode {
     Hotkeys,
     Index,
+    QuickRef,
 }
 
 struct Help {
@@ -283,6 +284,11 @@ impl TemplateApp {
                         HelpMode::Index,
                         RichText::new("Index").heading(),
                     );
+                    ui.selectable_value(
+                        &mut self.help.mode,
+                        HelpMode::QuickRef,
+                        RichText::new("Quick Reference").heading(),
+                    );
                 });
                 match self.help.mode {
                     HelpMode::Hotkeys => {
@@ -387,6 +393,15 @@ impl TemplateApp {
                         if let Some(s) = new_filter {
                             self.help.filter = s;
                         }
+                    }
+                    HelpMode::QuickRef => {
+                        ui.hyperlink_to("Github README.md", "https://anykey111.github.io/README.md");
+                        ScrollArea::vertical()
+                            .auto_shrink([false; 2])
+                            .show(ui, |ui| {
+                            ui.style_mut().visuals.extreme_bg_color = self.theme.code_background; 
+                            ui.monospace(include_str!("../../xeh/README.md"));
+                        });
                     }
                 }
             }); //help
