@@ -1,7 +1,19 @@
 use eframe::{egui, egui::*};
 
-pub fn interactive_canvas_pressed(ctx: &egui::Context) -> bool {
-    ctx.input().modifiers.ctrl && ctx.input().key_pressed(Key::Num4)
+pub fn interactive_canvas_pressed(i: &InputState) -> bool {
+    i.modifiers.ctrl && 
+    i.modifiers.shift && 
+    i.key_pressed(Key::M)
+}
+
+pub fn switch_to_code_pressed(i: &InputState) -> bool {
+    i.modifiers.ctrl && i.modifiers.shift && i.key_pressed(egui::Key::J)
+}
+
+pub fn help_pressed(i: &InputState) -> bool {
+    i.modifiers.ctrl &&
+        i.modifiers.shift &&
+        i.key_pressed(egui::Key::G)
 }
 
 pub fn scroll_view_pressed(ctx: &egui::Context, page_size: isize) -> isize {
@@ -19,37 +31,25 @@ pub fn scroll_view_pressed(ctx: &egui::Context, page_size: isize) -> isize {
 }
 
 pub fn recording_pressed(ui: &Ui) -> bool {
-    ui.input().modifiers.ctrl && ui.input().key_pressed(egui::Key::Y)
+    ui.input().key_pressed(egui::Key::Y)
 }
 
 pub fn snapshot_pressed(ui: &Ui) -> bool {
-    ui.input().modifiers.ctrl && ui.input().key_pressed(egui::Key::S)
+    ui.input().key_pressed(egui::Key::S)
 }
 
 pub fn rollback_pressed(ui: &Ui) -> bool {
-    ui.input().modifiers.ctrl && ui.input().key_pressed(egui::Key::L)
-}
-
-pub fn help_pressed(ui: &Ui) -> bool {
-    ui.input().modifiers.ctrl && ui.input().key_pressed(egui::Key::G)
+    ui.input().key_pressed(egui::Key::L)
 }
 
 pub fn next_pressed(ui: &Ui) -> bool {
-    ui.input().modifiers.ctrl && ui.input().key_pressed(egui::Key::N)
-}
+    ui.input().key_pressed(egui::Key::N)
+}   
 
 pub fn rnext_pressed(ui: &Ui) -> bool {
-    ui.input().modifiers.ctrl && ui.input().key_pressed(egui::Key::B)
+    ui.input().key_pressed(egui::Key::B)
 }
 
 pub fn run_pressed(ui: &Ui) -> bool {
-    ui.input().modifiers.ctrl && ui.input().key_pressed(egui::Key::R)
-}
-
-pub fn switch_to_grid_pressed(i: &InputState) -> bool {
-    i.modifiers.ctrl && i.key_down(egui::Key::Num1)
-}
-
-pub fn switch_to_code_pressed(i: &InputState) -> bool {
-    i.modifiers.ctrl && i.key_down(egui::Key::Num2)
+    ui.input().key_pressed(egui::Key::R)
 }

@@ -1,9 +1,9 @@
 use eframe::egui::*;
 use eframe::{egui, epi};
 
-use crate::hotkeys::*;
+use crate::hotkeys;
 use crate::{canvas::*, layouter};
-use crate::{hotkeys, style::*};
+use crate::style::*;
 use xeh::prelude::*;
 use std::fmt::Write;
 
@@ -236,6 +236,8 @@ impl TemplateApp {
         let mut rnext_clicked = false;
         let mut repl_clicked = false;
         let mut trial_clicked = false;
+        let mut help_clicked = false;
+        let mut canvas_clicked = false;
         let win_rect = ctx.available_rect();
 
         self.theme.theme_ui(ctx, &mut self.theme_editor);
@@ -261,9 +263,6 @@ impl TemplateApp {
                 });
             });
 
-        if crate::hotkeys::interactive_canvas_pressed(ctx) {
-            self.canvas_open = !self.canvas_open;
-        }
         Window::new("Canvas").open(&mut self.canvas_open).default_size(self.canvas.size()).resizable(true).show(ctx, |ui| {
             self.canvas.ui(ui, &self.theme);
         }); 
@@ -302,17 +301,18 @@ impl TemplateApp {
                             .auto_shrink([false; 2])
                             .show(ui, |ui| {
                                 ui.heading("Hotkeys");
-                                add(ui, "Open binary file...", "(Ctrl + O)");
-                                add(ui, "Program - Run", "(Ctrl + R)");
-                                add(ui, "Program - Snapshot", "(Ctrl + S)");
-                                add(ui, "Program - Rollback", "(Ctrl + L)");
-                                add(ui, "Debugger - Next", "(Ctrl + B)");
-                                add(ui, "Debugger - Reverse Next", "(Ctrl + N)");
-                                add(ui, "Debugger - Toggle Reverse Next Recording", "(Ctrl + Y)");
-                                add(ui, "Switch to Hex Panel", "(Ctrl + 1)");
-                                add(ui, "Switch to Code Panel", "(Ctrl + 2)");
-                                add(ui, "Canvas - Show", "(Ctrl + 4)");
-                                add(ui, "Help - Show", "(Ctrl + G)");
+                                add(ui, "Open binary file...", "(Esc, O)");
+                                add(ui, "Program - Run", "(Esc, R)");
+                                add(ui, "Program - Snapshot", "(Esc, S)");
+                                add(ui, "Program - Rollback", "(Esc, L)");
+                                add(ui, "Debugger - Next", "(Esc, B)");
+                                add(ui, "Debugger - Reverse Next", "(Esc, N)");
+                                add(ui, "Debugger - Toggle Reverse Next Recording", "(Esc, Y)");
+                                add(ui, "Hex - Scroll Up", "(Esc, Arrow Up)");
+                                add(ui, "Hex - Scroll Down", "(Esc, Arrow Down)");
+                                add(ui, "Focus on Code", "(Ctrl + Shift + J)");
+                                add(ui, "Canvas - Show", "(Ctrl + Shift + M)");
+                                add(ui, "Help - Show", "(Ctrl + Shift + G)");
                                 ui.heading("Mouse");
                                 ui.colored_label(
                                     self.theme.text,
@@ -406,6 +406,8 @@ impl TemplateApp {
                 }
             }); //help
 
+        let mut rnext_enabled = false;
+        let rollback_enabled = self.snapshot.is_some() && !self.is_trial();
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if ui.button(self.menu_text("Open...")).clicked() {
@@ -440,63 +442,43 @@ impl TemplateApp {
                     }
                 }
 
-                if ui.button(self.menu_text("Run (Ctrl+R)")).clicked() || run_pressed(ui) {
-                    run_clicked = true;
-                }
+                run_clicked = ui.button(self.menu_text("Run")).clicked();
                 snapshot_clicked = ui
                     .add_enabled(!self.is_trial(), Button::new(self.menu_text("Snapshot")))
-                    .clicked()
-                    || snapshot_pressed(ui);
-                if snapshot_clicked && !self.is_trial() {
-                    let t = Instant::now();
-                    self.snapshot();
-                    self.last_dt = Some(t.elapsed().as_secs_f64());
-                }
-                let rollback_enabled = self.snapshot.is_some() && !self.is_trial();
+                    .clicked();
                 rollback_clicked = ui
                     .add_enabled(rollback_enabled, Button::new(self.menu_text("Rollback")))
-                    .clicked()
-                    || rollback_pressed(ui);
-                if rollback_clicked && rollback_enabled {
-                    let t = Instant::now();
-                    self.rollback();
-                    self.last_dt = Some(t.elapsed().as_secs_f64());
-                }
+                    .clicked();
                 repl_clicked = ui
                     .radio(self.trial_code.is_none(), self.menu_text("REPL"))
                     .clicked();
                 trial_clicked = ui
                     .radio(self.trial_code.is_some(), self.menu_text("TRIAL"))
                     .clicked();
-                if recording_pressed(ui) {
-                    self.rdebug_enabled = !self.rdebug_enabled;
-                }
+ 
                 ui.checkbox(&mut self.rdebug_enabled, "RRecord");
                 self.xs.set_recording_enabled(self.rdebug_enabled);
                 if self.xs.is_recording() {
-                    let rnext_enabled = self.rlog_size().map(|n| n > 0).unwrap_or(false);
+                    rnext_enabled = self.rlog_size().map(|n| n > 0).unwrap_or(false);
                     rnext_clicked = ui
                         .add_enabled(rnext_enabled, Button::new(self.menu_text("Rnext")))
-                        .clicked()
-                        || rnext_pressed(ui);
+                        .clicked();
                     next_clicked = ui
                         .add_enabled(self.xs.is_running(), Button::new(self.menu_text("Next")))
-                        .clicked()
-                        || next_pressed(ui);
+                        .clicked();
                 }
-                if ui.button(self.menu_text("Help (Ctrl+G)")).clicked() || help_pressed(ui) {
-                    self.help.is_open = !self.help.is_open;
-                }
+                canvas_clicked = ui.button(self.menu_text("Canvas")).clicked();
                 ui.menu_button("Examples", |ui| {
                     self.menu_examples(ui);
                 });
                 if ui.button(self.menu_text("Theme")).clicked() {
                     self.theme_editor = !self.theme_editor;
                 }
+                help_clicked = ui.button(self.menu_text("Help (Ctrl + Shift + G)")).clicked();
             });
         }); // top panel
 
-        let hex_panel = egui::SidePanel::left("left_panel").show(ctx, |ui| {
+        egui::SidePanel::left("left_panel").show(ctx, |ui| {
             let ncols = self.num_cols * 4 + 10;
             let total_rows = self.num_rows;
             let text_style = TextStyle::Monospace;
@@ -604,13 +586,10 @@ impl TemplateApp {
                 }
             });
         });
-        if hotkeys::switch_to_grid_pressed(&ctx.input()) {
-            hex_panel.response.request_focus();
-        }
 
+        let esc_pressed = ctx.input().key_down(Key::Escape);
+        let mut live_has_focus = false;
         egui::CentralPanel::default().show(ctx, |ui| {
-            let mut live_has_focus = false;
-
             egui::containers::ScrollArea::vertical()
                 .stick_to_bottom()
                 .show(ui, |ui| {
@@ -708,7 +687,9 @@ impl TemplateApp {
                         code.cursor_range.map(|c| c.primary.ccursor.index),
                     );
                     self.help.live_cursor = word;
-                    if hotkeys::switch_to_code_pressed(&ctx.input()) || self.setup_focus {
+                    if esc_pressed {
+                        code.response.surrender_focus();
+                    } else if hotkeys::switch_to_code_pressed(&ctx.input()) || self.setup_focus {
                         code.response.request_focus();
                         self.setup_focus = false;
                     }
@@ -717,10 +698,45 @@ impl TemplateApp {
 
             let has_some_code = !self.live_code.trim().is_empty();
             if !live_has_focus {
-                let n = scroll_view_pressed(ctx, self.num_cols);
+                let n = hotkeys::scroll_view_pressed(ctx, self.num_cols);
                 if n != 0 {
                     self.move_view(n);
                 }
+                if hotkeys::recording_pressed(ui) {
+                    self.rdebug_enabled = !self.rdebug_enabled;
+                }
+                if hotkeys::run_pressed(ui) {
+                    run_clicked = true;
+                }
+                if hotkeys::next_pressed(ui) {
+                    next_clicked = true;
+                }
+                if hotkeys::rnext_pressed(ui) {
+                    rnext_clicked = true;
+                }
+                if hotkeys::rollback_pressed(ui) {
+                    rollback_clicked = true;
+                }
+                if hotkeys::snapshot_pressed(ui) {
+                    snapshot_clicked = true;
+                }
+            }
+
+            if hotkeys::interactive_canvas_pressed(&ctx.input()) || canvas_clicked {
+                self.canvas_open = !self.canvas_open;
+            }
+            if hotkeys::help_pressed(&ui.input()) || help_clicked {
+                self.help.is_open = !self.help.is_open;
+            }
+            if rollback_clicked && rollback_enabled {
+                let t = Instant::now();
+                self.rollback();
+                self.last_dt = Some(t.elapsed().as_secs_f64());
+            }
+            if snapshot_clicked && !self.is_trial() {
+                let t = Instant::now();
+                self.snapshot();
+                self.last_dt = Some(t.elapsed().as_secs_f64());
             }
 
             if self.is_trial() && repl_clicked {
