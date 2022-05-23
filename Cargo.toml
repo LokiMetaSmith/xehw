@@ -15,7 +15,7 @@ egui = "0.17.0"
 eframe = { version = "0.17.0", features = ["persistence"] }
 serde = { version = "1", features = ["derive"], optional = true }
 xeh = { path = "../xeh", features = [], default-features = false } # features = ["mmap"]
-rfd = "0.4.4"
+rfd = "0.8.2"
 arcstr = "1.1.3"
 
 [features]

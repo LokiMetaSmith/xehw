@@ -12,7 +12,7 @@ type Instant = instant::Instant;
 #[cfg(not(target_arch = "wasm32"))]
 type Instant = std::time::Instant;
 
-type BoxFuture = Box<dyn Future<Output = Vec<u8>>>;
+type BoxFuture = Box<dyn Future<Output = Option<Vec<u8>>>>;
 
 #[derive(PartialEq)]
 enum HelpMode {
@@ -412,9 +412,9 @@ impl TemplateApp {
                     self.bin_future = Some(Box::pin(async {
                         let res = rfd::AsyncFileDialog::new().pick_file().await;
                         if let Some(file) = res {
-                            file.read().await
+                            Some(file.read().await)
                         } else {
-                            Vec::new()
+                            None
                         }
                     }));
                 }
@@ -423,7 +423,10 @@ impl TemplateApp {
                     let context = &mut Context::from_waker(&waker);
                     match Pin::new(future).poll(context) {
                         Poll::Pending => (),
-                        Poll::Ready(data) => {
+                        Poll::Ready(None) => {
+                            self.bin_future.take();
+                        }
+                        Poll::Ready(Some(data)) => {
                             let s = Xbitstr::from(data);
                             self.bin_future.take();
                             self.binary_dropped(s);
