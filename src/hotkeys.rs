@@ -1,19 +1,15 @@
 use eframe::{egui, egui::*};
 
 pub fn interactive_canvas_pressed(i: &InputState) -> bool {
-    i.modifiers.ctrl && 
-    i.modifiers.shift && 
     i.key_pressed(Key::M)
 }
 
-pub fn switch_to_code_pressed(i: &InputState) -> bool {
-    i.modifiers.ctrl && i.modifiers.shift && i.key_pressed(egui::Key::J)
+pub fn focus_on_code_pressed(i: &InputState) -> bool {
+    i.key_pressed(egui::Key::E)
 }
 
 pub fn help_pressed(i: &InputState) -> bool {
-    i.modifiers.ctrl &&
-        i.modifiers.shift &&
-        i.key_pressed(egui::Key::G)
+    i.key_pressed(egui::Key::G)
 }
 
 pub fn scroll_view_pressed(ctx: &egui::Context, page_size: isize) -> isize {

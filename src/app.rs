@@ -46,7 +46,7 @@ pub struct TemplateApp {
     snapshot: Option<(Xstate, Vec<FrozenStr>)>,
     bin_future: Option<Pin<BoxFuture>>,
     input_binary: Option<Xbitstr>,
-    setup_focus: bool,
+    focus_on_code: bool,
     bytecode_open: bool,
     help: Help,
     theme: Theme,
@@ -83,7 +83,7 @@ impl Default for TemplateApp {
             snapshot: None,
             bin_future: None,
             input_binary: None,
-            setup_focus: true,
+            focus_on_code: true,
             rdebug_enabled: false,
             bytecode_open: false,
             help: Help {
@@ -310,9 +310,9 @@ impl TemplateApp {
                                 add(ui, "Debugger - Toggle Reverse Next Recording", "(Esc, Y)");
                                 add(ui, "Hex - Scroll Up", "(Esc, Arrow Up)");
                                 add(ui, "Hex - Scroll Down", "(Esc, Arrow Down)");
-                                add(ui, "Focus on Code", "(Ctrl + Shift + J)");
-                                add(ui, "Canvas - Show", "(Ctrl + Shift + M)");
-                                add(ui, "Help - Show", "(Ctrl + Shift + G)");
+                                add(ui, "Focus on Code", "(Esc, E)");
+                                add(ui, "Canvas - Show", "(Esc, M)");
+                                add(ui, "Help - Show", "(Esc, G)");
                                 ui.heading("Mouse");
                                 ui.colored_label(
                                     self.theme.text,
@@ -697,9 +697,9 @@ impl TemplateApp {
                     self.help.live_cursor = word;
                     if esc_pressed {
                         code.response.surrender_focus();
-                    } else if hotkeys::switch_to_code_pressed(&ctx.input()) || self.setup_focus {
+                    } else if hotkeys::focus_on_code_pressed(&ctx.input()) || self.focus_on_code {
                         code.response.request_focus();
-                        self.setup_focus = false;
+                        self.focus_on_code = false;
                     }
                     live_has_focus = code.response.has_focus();
                 });
@@ -728,12 +728,20 @@ impl TemplateApp {
                 if hotkeys::snapshot_pressed(ui) {
                     snapshot_clicked = true;
                 }
+                if hotkeys::interactive_canvas_pressed(&ctx.input()) {
+                    canvas_clicked = true;
+                }
+                if hotkeys::help_pressed(&ui.input()) {
+                    help_clicked = true;
+                }
+                if hotkeys::focus_on_code_pressed(&ui.input()) {
+                    self.focus_on_code = true;
+                }
             }
-
-            if hotkeys::interactive_canvas_pressed(&ctx.input()) || canvas_clicked {
+            if canvas_clicked {
                 self.canvas_open = !self.canvas_open;
             }
-            if hotkeys::help_pressed(&ui.input()) || help_clicked {
+            if help_clicked {
                 self.help.is_open = !self.help.is_open;
             }
             if rollback_clicked && rollback_enabled {
@@ -750,14 +758,14 @@ impl TemplateApp {
             if self.is_trial() && repl_clicked {
                 self.rollback();
                 self.trial_code = None;
-                self.setup_focus = true;
+                self.focus_on_code = true;
             }
             if (!self.is_trial() && trial_clicked) || (self.is_trial() && self.snapshot.is_none()) {
                 let t = Instant::now();
                 self.trial_code = Some(Xstr::new());
                 self.snapshot();
                 self.last_dt = Some(t.elapsed().as_secs_f64());
-                self.setup_focus = true;
+                self.focus_on_code = true;
                 self.frozen_code.push(FrozenStr::Log(
                     "Trial and error mode, everyting evaluating on-fly!\n\
                 Press Run to freeze changes."
