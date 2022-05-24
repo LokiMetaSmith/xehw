@@ -410,16 +410,19 @@ impl TemplateApp {
         let rollback_enabled = self.snapshot.is_some() && !self.is_trial();
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                if ui.button(self.menu_text("Open...")).clicked() {
-                    self.bin_future = Some(Box::pin(async {
-                        let res = rfd::AsyncFileDialog::new().pick_file().await;
-                        if let Some(file) = res {
-                            Some(file.read().await)
-                        } else {
-                            None
-                        }
-                    }));
-                }
+                ui.menu_button("File", |ui| {
+                    if ui.button(self.menu_text("Open...")).clicked() {
+                        self.bin_future = Some(Box::pin(async {
+                            let res = rfd::AsyncFileDialog::new().pick_file().await;
+                            if let Some(file) = res {
+                                Some(file.read().await)
+                            } else {
+                                None
+                            }
+                        }));
+                        ui.close_menu();
+                    }
+                });
                 if let Some(future) = self.bin_future.as_mut() {
                     let waker = Arc::new(MyWaker()).into();
                     let context = &mut Context::from_waker(&waker);
@@ -441,13 +444,22 @@ impl TemplateApp {
                         self.binary_dropped(s);
                     }
                 }
-
-                run_clicked = ui.button(self.menu_text("Run")).clicked();
+                ui.menu_button("View", |ui| {
+                    if ui.button(self.menu_text("Canvas")).clicked() {
+                        canvas_clicked = true;
+                        ui.close_menu();
+                    }
+                    if ui.button(self.menu_text("Theme")).clicked() {
+                        self.theme_editor = !self.theme_editor;
+                        ui.close_menu();
+                    }
+                });
+                run_clicked = ui.button(self.menu_text("🔨 Run")).clicked();
                 snapshot_clicked = ui
-                    .add_enabled(!self.is_trial(), Button::new(self.menu_text("Snapshot")))
+                    .add_enabled(!self.is_trial(), Button::new(self.menu_text("💾 Snapshot")))
                     .clicked();
                 rollback_clicked = ui
-                    .add_enabled(rollback_enabled, Button::new(self.menu_text("Rollback")))
+                    .add_enabled(rollback_enabled, Button::new(self.menu_text("🔥 Rollback")))
                     .clicked();
                 repl_clicked = ui
                     .radio(self.trial_code.is_none(), self.menu_text("REPL"))
@@ -461,20 +473,16 @@ impl TemplateApp {
                 if self.xs.is_recording() {
                     rnext_enabled = self.rlog_size().map(|n| n > 0).unwrap_or(false);
                     rnext_clicked = ui
-                        .add_enabled(rnext_enabled, Button::new(self.menu_text("Rnext")))
+                        .add_enabled(rnext_enabled, Button::new(self.menu_text("↩ Rnext")))
                         .clicked();
                     next_clicked = ui
-                        .add_enabled(self.xs.is_running(), Button::new(self.menu_text("Next")))
+                        .add_enabled(self.xs.is_running(), Button::new(self.menu_text("↪ Next")))
                         .clicked();
                 }
-                canvas_clicked = ui.button(self.menu_text("Canvas")).clicked();
                 ui.menu_button("Examples", |ui| {
                     self.menu_examples(ui);
                 });
-                if ui.button(self.menu_text("Theme")).clicked() {
-                    self.theme_editor = !self.theme_editor;
-                }
-                help_clicked = ui.button(self.menu_text("Help (Ctrl + Shift + G)")).clicked();
+                help_clicked = ui.button(self.menu_text("Help")).clicked();
             });
         }); // top panel
 
@@ -752,7 +760,7 @@ impl TemplateApp {
                 self.setup_focus = true;
                 self.frozen_code.push(FrozenStr::Log(
                     "Trial and error mode, everyting evaluating on-fly!\n\
-                Press Run or hit Ctrl+R to freeze changes."
+                Press Run to freeze changes."
                         .into(),
                 ));
             }
