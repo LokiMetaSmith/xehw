@@ -454,7 +454,7 @@ impl TemplateApp {
                         ui.close_menu();
                     }
                 });
-                run_clicked = ui.button(self.menu_text("🔨 Run")).clicked();
+                run_clicked = ui.button(self.menu_text("▶ Run")).clicked();
                 snapshot_clicked = ui
                     .add_enabled(!self.is_trial(), Button::new(self.menu_text("💾 Snapshot")))
                     .clicked();
@@ -514,7 +514,7 @@ impl TemplateApp {
                     }
                     let mut ruler = String::new();
                     for i in 0..self.num_cols {
-                        write!(ruler, " {:02x}", i).unwrap();
+                        write!(ruler, " {:x}{:x}", i, i).unwrap();
                     }
                     ui.colored_label(self.theme.comment, ruler);
                 });
@@ -949,6 +949,10 @@ fn split_highlight(loc: &TokenLocation) -> (String, String, String) {
 impl epi::App for TemplateApp {
     fn name(&self) -> &str {
         "XEH"
+    }
+
+    fn max_size_points(&self) -> egui::Vec2 {
+        egui::Vec2::new(1280.0, 2048.0)
     }
 
     fn clear_color(&self) -> egui::Rgba {
