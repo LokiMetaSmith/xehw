@@ -240,6 +240,7 @@ impl TemplateApp {
         let mut trial_clicked = false;
         let mut help_clicked = false;
         let mut canvas_clicked = false;
+        let mut open_clicked = false;
         let win_rect = ctx.available_rect();
 
         self.theme.theme_ui(ctx, &mut self.theme_editor);
@@ -414,38 +415,10 @@ impl TemplateApp {
             ui.horizontal(|ui| {
                 ui.menu_button("File", |ui| {
                     if ui.button(self.menu_text("Open...")).clicked() {
-                        self.bin_future = Some(Box::pin(async {
-                            let res = rfd::AsyncFileDialog::new().pick_file().await;
-                            if let Some(file) = res {
-                                Some(file.read().await)
-                            } else {
-                                None
-                            }
-                        }));
+                        open_clicked = true;
                         ui.close_menu();
                     }
                 });
-                if let Some(future) = self.bin_future.as_mut() {
-                    let waker = Arc::new(MyWaker()).into();
-                    let context = &mut Context::from_waker(&waker);
-                    match Pin::new(future).poll(context) {
-                        Poll::Pending => (),
-                        Poll::Ready(None) => {
-                            self.bin_future.take();
-                        }
-                        Poll::Ready(Some(data)) => {
-                            let s = Xbitstr::from(data);
-                            self.bin_future.take();
-                            self.binary_dropped(s);
-                        }
-                    }
-                }
-                if let Some(d) = ctx.input().raw.dropped_files.first() {
-                    if let Some(data) = &d.bytes {
-                        let s = Xbitstr::from(data.as_ref().to_owned());
-                        self.binary_dropped(s);
-                    }
-                }
                 ui.menu_button("View", |ui| {
                     if ui.button(self.menu_text("Canvas")).clicked() {
                         canvas_clicked = true;
@@ -739,6 +712,15 @@ impl TemplateApp {
                 if hotkeys::focus_on_code_pressed(&ui.input()) {
                     self.focus_on_code = true;
                 }
+                if hotkeys::file_open_pressed(&ui.input()) {
+                    open_clicked = true;
+                }
+            }
+            if open_clicked {
+                self.open_file_dialog();
+            }
+            if self.process_async_file_open() || self.process_file_drop(ctx) {
+                ctx.request_repaint();
             }
             if canvas_clicked {
                 self.canvas_open = !self.canvas_open;
@@ -926,6 +908,48 @@ impl TemplateApp {
         //                                    include_bytes!("docs/ex/6502.bin"));
         //     ui.close_menu();
         // }
+    }
+
+    fn open_file_dialog(&mut self) {
+        self.bin_future = Some(Box::pin(async {
+            let res = rfd::AsyncFileDialog::new().pick_file().await;
+            if let Some(file) = res {
+                Some(file.read().await)
+            } else {
+                None
+            }
+        }));
+    }
+
+    fn process_async_file_open(&mut self) -> bool {
+        if let Some(future) = self.bin_future.as_mut() {
+            let waker = Arc::new(MyWaker()).into();
+            let context = &mut Context::from_waker(&waker);
+            match Pin::new(future).poll(context) {
+                Poll::Pending => (),
+                Poll::Ready(None) => {
+                    self.bin_future.take();
+                }
+                Poll::Ready(Some(data)) => {
+                    let s = Xbitstr::from(data);
+                    self.bin_future.take();
+                    self.binary_dropped(s);
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    fn process_file_drop(&mut self, ctx: &egui::Context) -> bool {
+        if let Some(d) = ctx.input().raw.dropped_files.first() {
+            if let Some(data) = &d.bytes {
+                let s = Xbitstr::from(data.as_ref().to_owned());
+                self.binary_dropped(s);
+                return true;
+            }
+        }
+        return false;
     }
 }
 

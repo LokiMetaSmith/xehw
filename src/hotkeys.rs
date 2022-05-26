@@ -8,6 +8,10 @@ pub fn focus_on_code_pressed(i: &InputState) -> bool {
     i.key_pressed(egui::Key::E)
 }
 
+pub fn file_open_pressed(i: &InputState) -> bool {
+    i.key_pressed(egui::Key::O)
+}
+
 pub fn help_pressed(i: &InputState) -> bool {
     i.key_pressed(egui::Key::G)
 }
