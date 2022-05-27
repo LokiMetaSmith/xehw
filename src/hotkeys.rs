@@ -12,8 +12,12 @@ pub fn file_open_pressed(i: &InputState) -> bool {
     i.key_pressed(egui::Key::O)
 }
 
-pub fn help_pressed(i: &InputState) -> bool {
+pub fn goto_pressed(i: &InputState) -> bool {
     i.key_pressed(egui::Key::G)
+}
+
+pub fn help_pressed(i: &InputState) -> bool {
+    i.key_pressed(egui::Key::H)
 }
 
 pub fn scroll_view_pressed(ctx: &egui::Context, page_size: isize) -> isize {

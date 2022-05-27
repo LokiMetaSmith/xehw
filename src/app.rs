@@ -32,6 +32,9 @@ struct Help {
 
 pub struct TemplateApp {
     pub xs: Xstate,
+    view_pos: usize,
+    num_rows: usize,
+    num_cols: usize,
     live_code: String,
     trial_code: Option<Xstr>,
     frozen_code: Vec<FrozenStr>,
@@ -46,6 +49,8 @@ pub struct TemplateApp {
     input_binary: Option<Xbitstr>,
     focus_on_code: bool,
     bytecode_open: bool,
+    goto_open: bool,
+    goto_text: String,
     help: Help,
     theme: Theme,
     theme_editor: bool,
@@ -68,7 +73,7 @@ impl Default for TemplateApp {
         let xs = Self::xs_respawn();
         Self {
             xs,
-            start_row: 0,
+            view_pos: 0,
             num_rows: 10,
             num_cols: 8,
             live_code: String::new(),
@@ -85,6 +90,8 @@ impl Default for TemplateApp {
             focus_on_code: true,
             rdebug_enabled: false,
             bytecode_open: false,
+            goto_open: false,
+            goto_text: String::new(),
             help: Help {
                 is_open: false,
                 mode: HelpMode::Hotkeys,
@@ -129,29 +136,9 @@ impl TemplateApp {
     }
 
     fn move_view(&mut self, nrows: isize) {
-        let n = (self.start_row + nrows)
-            .max(0)
-            .min(self.last_row_index());
-        self.start_row = n.max(0);
-    }
-
-    fn last_row_index(&self) -> isize {
-        let e = self.current_bstr().end();
-        let bits_per_row = self.num_cols as usize * 8;
-        let i = (e / bits_per_row) as isize;
-        if e == (i as usize * bits_per_row) {
-            (i - 1).max(0)
-        } else {
-            i
-        }
-    }
-
-    fn current_row_index(&self) -> isize {
-        self.current_offset() as isize / (self.num_cols * 8)
-    }
-
-    fn goto_row(&mut self, row: isize) {
-        self.start_row = row;
+        let n = (self.view_pos as isize + (nrows * self.num_cols as isize * 8))
+            .max(0) as usize;
+        self.view_pos = n.min(self.current_bstr().end());
     }
 
     fn current_bstr(&self) -> &Xbitstr {
@@ -238,6 +225,7 @@ impl TemplateApp {
         let mut help_clicked = false;
         let mut canvas_clicked = false;
         let mut open_clicked = false;
+        let mut goto_clicked = false;
         let win_rect = ctx.available_rect();
 
         self.theme.theme_ui(ctx, &mut self.theme_editor);
@@ -266,6 +254,48 @@ impl TemplateApp {
         Window::new("Canvas").open(&mut self.canvas_open).default_size(self.canvas.size()).resizable(true).show(ctx, |ui| {
             self.canvas.ui(ui, &self.theme);
         }); 
+
+        let mut is_goto_open = self.goto_open;
+        Window::new("Go To...").open(&mut is_goto_open).show(ctx, |ui| {
+            ui.style_mut().visuals.extreme_bg_color = self.theme.code_background;
+            let mut ok_clicked = ui.input().key_pressed(Key::Enter);
+            ui.text_edit_singleline(&mut self.goto_text).request_focus();
+            ui.style_mut().visuals.extreme_bg_color = self.theme.border;
+            ui.horizontal(|ui| {
+            if ui.button("OK").clicked() {
+                ok_clicked = true;
+            }
+            if ui.button("Close").clicked() {
+                self.goto_text.clear();
+                self.goto_open = false;
+            }
+        });
+        let mut tmpxs = Xstate::core().unwrap();
+        let evalgoto = |xs: &mut Xstate, s:&str| {
+            xs.eval(s.into())?;
+            xs.pop_data()?.to_xint()
+        };
+                match evalgoto(&mut tmpxs, &self.goto_text) {
+                    Ok(n) => {
+                            let bs = self.current_bstr().clone();
+                            if n < 0 {
+                                self.view_pos = bs.end().wrapping_sub(n.abs() as usize);
+                            } else {
+                                self.view_pos = bs.end().min(n as usize);
+                            }
+                        if ok_clicked {
+                            self.goto_text.clear();
+                            self.goto_open = false;
+                        }
+                    }
+                    Err(e) => {
+                        ui.colored_label(self.theme.error, format!("{}", e));
+                    }
+                }
+        });
+        if !is_goto_open {
+            self.goto_open = false;
+        }
 
         let help_pos = pos2(win_rect.width() * 0.25, win_rect.height() * 0.25);
         egui::Window::new("Help")
@@ -310,9 +340,10 @@ impl TemplateApp {
                                 add(ui, "Debugger - Toggle Reverse Next Recording", "(Esc, Y)");
                                 add(ui, "Hex - Scroll Up", "(Esc, Arrow Up)");
                                 add(ui, "Hex - Scroll Down", "(Esc, Arrow Down)");
+                                add(ui, "Hex - Go To...", "(Esc, G)");
                                 add(ui, "Focus on Code", "(Esc, E)");
                                 add(ui, "Canvas - Show", "(Esc, M)");
-                                add(ui, "Help - Show", "(Esc, G)");
+                                add(ui, "Help - Show", "(Esc, H)");
                                 ui.heading("Mouse");
                                 ui.colored_label(
                                     self.theme.text,
@@ -417,6 +448,10 @@ impl TemplateApp {
                     }
                 });
                 ui.menu_button("View", |ui| {
+                    if ui.button(self.menu_text("Go To...")).clicked() {
+                        goto_clicked = true;
+                        ui.close_menu();
+                    }
                     if ui.button(self.menu_text("Canvas")).clicked() {
                         canvas_clicked = true;
                         ui.close_menu();
@@ -470,19 +505,19 @@ impl TemplateApp {
 
             let xgrid = ui.vertical(|ui| {
                 let offset = self.current_offset();
-                let mut from = (self.start_row * self.num_cols * 8) as usize;
+                let mut from = self.view_pos;
                 let bs = self.current_bstr().seek(from).unwrap_or_default();
                 let mut it = bs.iter8();
                 let visible_bits = self.num_rows * self.num_cols * 8;
-                let to = bs.end().min(from + visible_bits as usize);
+                let to = bs.end().min(from + visible_bits);
                 ui.spacing_mut().item_spacing = vec2(0.0, 2.0);
                 ui.spacing_mut().interact_size = vec2(0.0, 0.0);
-                
+
                 ui.horizontal(|ui| {
                     let hdr_text = self.hex_offset_str(offset, bs.end());
                     let hdr = Label::new(RichText::new(hdr_text).color(self.theme.selection).underline()).sense(Sense::click());
                     if ui.add(hdr).clicked() {
-                        self.goto_row(self.current_row_index());
+                        self.view_pos = offset;
                     }
                     let mut ruler = String::new();
                     for i in 0..self.num_cols {
@@ -527,11 +562,6 @@ impl TemplateApp {
                         }
                         ui.colored_label(self.theme.comment, ascii);
                     });
-                }
-                let end_offs = RichText::new(self.hex_offset_str(bs.end(), bs.len())).color(self.theme.selection).underline();
-                let end_url = Label::new(end_offs).sense(Sense::click());
-                if ui.add(end_url).clicked() {
-                    self.goto_row(self.last_row_index());
                 }
             });
 
@@ -678,7 +708,7 @@ impl TemplateApp {
 
             let has_some_code = !self.live_code.trim().is_empty();
             if !live_has_focus {
-                let n = hotkeys::scroll_view_pressed(ctx, self.num_cols);
+                let n = hotkeys::scroll_view_pressed(ctx, self.num_cols as isize);
                 if n != 0 {
                     self.move_view(n);
                 }
@@ -712,6 +742,12 @@ impl TemplateApp {
                 if hotkeys::file_open_pressed(&ui.input()) {
                     open_clicked = true;
                 }
+                if hotkeys::goto_pressed(&ui.input()) {
+                    goto_clicked = true;
+                }
+            }
+            if goto_clicked {
+                self.goto_open = true;
             }
             if open_clicked {
                 self.open_file_dialog();
