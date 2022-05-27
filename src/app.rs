@@ -264,6 +264,11 @@ impl TemplateApp {
             .show(ctx, |ui| {
                 ui.style_mut().visuals.extreme_bg_color = self.theme.code_background;
                 let mut ok_clicked = ui.input().key_pressed(Key::Enter);
+                if ui.input().key_pressed(Key::Escape) {
+                    self.goto_open = false;
+                    self.goto_text.clear();
+                    return;
+                }
                 ui.text_edit_singleline(&mut self.goto_text).request_focus();
                 ui.style_mut().visuals.extreme_bg_color = self.theme.border;
                 ui.horizontal(|ui| {
