@@ -538,11 +538,6 @@ impl TemplateApp {
                     if ui.add(hdr).clicked() {
                         self.view_pos = offset;
                     }
-                    let mut ruler = String::new();
-                    for i in 0..self.num_cols {
-                        write!(ruler, " {:x}{:x}", i, i).unwrap();
-                    }
-                    ui.colored_label(self.theme.comment, ruler);
                 });
 
                 for _ in 0..self.num_rows {
