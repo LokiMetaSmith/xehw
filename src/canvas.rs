@@ -7,12 +7,8 @@ pub struct Canvas {
 }
 
 impl Canvas {
-
     pub fn new() -> Self {
-        Self {
-            tex: None,
-            zoom: 1,
-        }
+        Self { tex: None, zoom: 1 }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -31,7 +27,11 @@ impl Canvas {
         let size = self.size();
         ui.horizontal(|ui| {
             ui.colored_label(theme.comment, format!("{}x{}", size.x, size.y));
-            ui.add(Slider::new(&mut self.zoom, 1..=32).text("zoom").text_color(theme.comment));
+            ui.add(
+                Slider::new(&mut self.zoom, 1..=32)
+                    .text("zoom")
+                    .text_color(theme.comment),
+            );
         });
         if let Some(texture) = self.tex.as_ref() {
             let size = texture.size_vec2();

@@ -2,10 +2,10 @@ use eframe::egui::*;
 use eframe::{egui, epi};
 
 use crate::hotkeys;
-use crate::{canvas::*, layouter};
 use crate::style::*;
-use xeh::prelude::*;
+use crate::{canvas::*, layouter};
 use std::fmt::Write;
+use xeh::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
 type Instant = instant::Instant;
@@ -136,8 +136,7 @@ impl TemplateApp {
     }
 
     fn move_view(&mut self, nrows: isize) {
-        let n = (self.view_pos as isize + (nrows * self.num_cols as isize * 8))
-            .max(0) as usize;
+        let n = (self.view_pos as isize + (nrows * self.num_cols as isize * 8)).max(0) as usize;
         self.view_pos = n.min(self.current_bstr().end());
     }
 
@@ -251,38 +250,44 @@ impl TemplateApp {
                 });
             });
 
-        Window::new("Canvas").open(&mut self.canvas_open).default_size(self.canvas.size()).resizable(true).show(ctx, |ui| {
-            self.canvas.ui(ui, &self.theme);
-        }); 
+        Window::new("Canvas")
+            .open(&mut self.canvas_open)
+            .default_size(self.canvas.size())
+            .resizable(true)
+            .show(ctx, |ui| {
+                self.canvas.ui(ui, &self.theme);
+            });
 
         let mut is_goto_open = self.goto_open;
-        Window::new("Go To...").open(&mut is_goto_open).show(ctx, |ui| {
-            ui.style_mut().visuals.extreme_bg_color = self.theme.code_background;
-            let mut ok_clicked = ui.input().key_pressed(Key::Enter);
-            ui.text_edit_singleline(&mut self.goto_text).request_focus();
-            ui.style_mut().visuals.extreme_bg_color = self.theme.border;
-            ui.horizontal(|ui| {
-            if ui.button("OK").clicked() {
-                ok_clicked = true;
-            }
-            if ui.button("Close").clicked() {
-                self.goto_text.clear();
-                self.goto_open = false;
-            }
-        });
-        let mut tmpxs = Xstate::core().unwrap();
-        let evalgoto = |xs: &mut Xstate, s:&str| {
-            xs.eval(s.into())?;
-            xs.pop_data()?.to_xint()
-        };
+        Window::new("Go To...")
+            .open(&mut is_goto_open)
+            .show(ctx, |ui| {
+                ui.style_mut().visuals.extreme_bg_color = self.theme.code_background;
+                let mut ok_clicked = ui.input().key_pressed(Key::Enter);
+                ui.text_edit_singleline(&mut self.goto_text).request_focus();
+                ui.style_mut().visuals.extreme_bg_color = self.theme.border;
+                ui.horizontal(|ui| {
+                    if ui.button("OK").clicked() {
+                        ok_clicked = true;
+                    }
+                    if ui.button("Close").clicked() {
+                        self.goto_text.clear();
+                        self.goto_open = false;
+                    }
+                });
+                let mut tmpxs = Xstate::core().unwrap();
+                let evalgoto = |xs: &mut Xstate, s: &str| {
+                    xs.eval(s.into())?;
+                    xs.pop_data()?.to_xint()
+                };
                 match evalgoto(&mut tmpxs, &self.goto_text) {
                     Ok(n) => {
-                            let bs = self.current_bstr().clone();
-                            if n < 0 {
-                                self.view_pos = bs.end().wrapping_sub(n.abs() as usize);
-                            } else {
-                                self.view_pos = bs.end().min(n as usize);
-                            }
+                        let bs = self.current_bstr().clone();
+                        if n < 0 {
+                            self.view_pos = bs.end().wrapping_sub(n.abs() as usize);
+                        } else {
+                            self.view_pos = bs.end().min(n as usize);
+                        }
                         if ok_clicked {
                             self.goto_text.clear();
                             self.goto_open = false;
@@ -292,7 +297,7 @@ impl TemplateApp {
                         ui.colored_label(self.theme.error, format!("{}", e));
                     }
                 }
-        });
+            });
         if !is_goto_open {
             self.goto_open = false;
         }
@@ -395,7 +400,8 @@ impl TemplateApp {
                                             }
                                             if !section.is_empty() {
                                                 let name = RichText::new(section)
-                                                    .color(self.theme.selection).underline();
+                                                    .color(self.theme.selection)
+                                                    .underline();
                                                 if ui.button(name).clicked() {
                                                     new_filter = Some(section.to_string());
                                                 }
@@ -408,7 +414,11 @@ impl TemplateApp {
                                             for i in v.iter() {
                                                 if i.tag() == Some(&EXAMPLE_TAG) {
                                                     let s = i.str().ok().unwrap_or("");
-                                                    let example = RichText::new(s).color(self.theme.code_frozen).background_color(self.theme.code_background);
+                                                    let example = RichText::new(s)
+                                                        .color(self.theme.code_frozen)
+                                                        .background_color(
+                                                            self.theme.code_background,
+                                                        );
                                                     ui.separator();
                                                     ui.horizontal(|ui| {
                                                         ui.separator();
@@ -426,13 +436,17 @@ impl TemplateApp {
                         }
                     }
                     HelpMode::QuickRef => {
-                        ui.hyperlink_to("Github README.md", "https://anykey111.github.io/README.md");
+                        ui.hyperlink_to(
+                            "Github README.md",
+                            "https://anykey111.github.io/README.md",
+                        );
                         ScrollArea::vertical()
                             .auto_shrink([false; 2])
                             .show(ui, |ui| {
-                            ui.style_mut().visuals.extreme_bg_color = self.theme.code_background; 
-                            ui.monospace(include_str!("../../xeh/README.md"));
-                        });
+                                ui.style_mut().visuals.extreme_bg_color =
+                                    self.theme.code_background;
+                                ui.monospace(include_str!("../../xeh/README.md"));
+                            });
                     }
                 }
             }); //help
@@ -474,7 +488,7 @@ impl TemplateApp {
                 trial_clicked = ui
                     .radio(self.trial_code.is_some(), self.menu_text("TRIAL"))
                     .clicked();
- 
+
                 ui.checkbox(&mut self.rdebug_enabled, "RRecord");
                 self.xs.set_recording_enabled(self.rdebug_enabled);
                 if self.xs.is_recording() {
@@ -515,7 +529,12 @@ impl TemplateApp {
 
                 ui.horizontal(|ui| {
                     let hdr_text = self.hex_offset_str(offset, bs.end());
-                    let hdr = Label::new(RichText::new(hdr_text).color(self.theme.selection).underline()).sense(Sense::click());
+                    let hdr = Label::new(
+                        RichText::new(hdr_text)
+                            .color(self.theme.selection)
+                            .underline(),
+                    )
+                    .sense(Sense::click());
                     if ui.add(hdr).clicked() {
                         self.view_pos = offset;
                     }
@@ -539,12 +558,13 @@ impl TemplateApp {
                         ascii.push_str("  ");
                         for i in 0..self.num_cols {
                             if let Some((val, n)) = it.next() {
-                                let hex_data = RichText::new(format!(" {:02x}", val))
-                                    .color(if from < offset {
+                                let hex_data = RichText::new(format!(" {:02x}", val)).color(
+                                    if from < offset {
                                         self.theme.code_frozen
                                     } else {
                                         self.theme.code
-                                    });
+                                    },
+                                );
                                 ui.label(hex_data);
                                 let c = xeh::bitstr_ext::byte_to_dump_char(val);
                                 ascii.push(c);
@@ -855,8 +875,12 @@ impl TemplateApp {
                 self.live_code.clear();
                 self.last_dt = Some(t.elapsed().as_secs_f64());
             }
-            if next_clicked || rnext_clicked || run_clicked || rollback_clicked ||
-            (self.is_trial() && has_some_code) {
+            if next_clicked
+                || rnext_clicked
+                || run_clicked
+                || rollback_clicked
+                || (self.is_trial() && has_some_code)
+            {
                 self.debug_token = self.xs.location_from_current_ip();
                 if let Ok((w, h, buf)) = crate::canvas::copy_rgba(&mut self.xs) {
                     if self.canvas.is_empty() {
@@ -882,11 +906,7 @@ impl TemplateApp {
         let (a, b, c) = split_highlight(loc);
         ui.horizontal(|ui| {
             ui.label(RichText::new(a).monospace().color(self.theme.code));
-            ui.label(
-                RichText::new(b)
-                    .monospace()
-                    .color(self.theme.error),
-            );
+            ui.label(RichText::new(b).monospace().color(self.theme.error));
             ui.label(RichText::new(c).monospace().color(self.theme.code));
         });
         let n: usize = loc
@@ -904,11 +924,7 @@ impl TemplateApp {
         let (a, b, c) = split_highlight(loc);
         ui.horizontal_top(|ui| {
             ui.label(RichText::new(a).monospace().color(self.theme.code));
-            ui.label(
-                RichText::new(b)
-                    .monospace()
-                    .color(self.theme.debug_marker),
-            );
+            ui.label(RichText::new(b).monospace().color(self.theme.debug_marker));
             ui.label(RichText::new(c).monospace().color(self.theme.code));
         });
     }

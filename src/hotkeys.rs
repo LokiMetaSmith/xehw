@@ -48,7 +48,7 @@ pub fn rollback_pressed(ui: &Ui) -> bool {
 
 pub fn next_pressed(ui: &Ui) -> bool {
     ui.input().key_pressed(egui::Key::N)
-}   
+}
 
 pub fn rnext_pressed(ui: &Ui) -> bool {
     ui.input().key_pressed(egui::Key::B)

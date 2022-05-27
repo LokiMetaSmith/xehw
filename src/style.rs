@@ -77,7 +77,9 @@ impl Theme {
                     let text = RichText::new(tab[i].0);
                     ui.radio_value(&mut self.current_item, i, text);
                 }
-                let slider = widgets::Slider::new(&mut self.font_size, 8.0..=30.0).step_by(1.0).text("Font Size");
+                let slider = widgets::Slider::new(&mut self.font_size, 8.0..=30.0)
+                    .step_by(1.0)
+                    .text("Font Size");
                 ui.add(slider);
                 reset = ui.button(RichText::new("Reset Theme")).clicked();
             });
@@ -129,7 +131,9 @@ pub fn tune(ctx: &Context, theme: &Theme) {
     style.visuals = Visuals::light();
     style.override_text_style = Some(TextStyle::Monospace);
     style.override_font_id = Some(FontId::monospace(theme.font_size));
-    style.text_styles.insert(TextStyle::Monospace, FontId::monospace(theme.font_size));
+    style
+        .text_styles
+        .insert(TextStyle::Monospace, FontId::monospace(theme.font_size));
     style.visuals.window_shadow.extrusion = 1.0;
     style.visuals.button_frame = false;
     style.visuals.override_text_color = Some(theme.text);
@@ -140,7 +144,7 @@ pub fn tune(ctx: &Context, theme: &Theme) {
 
     style.visuals.extreme_bg_color = theme.border;
     style.visuals.window_shadow.color = theme.border;
-    
+
     style.visuals.widgets.inactive.bg_stroke.width = 1.0;
     style.visuals.widgets.inactive.bg_stroke.color = theme.border;
 
@@ -149,10 +153,10 @@ pub fn tune(ctx: &Context, theme: &Theme) {
 
     style.visuals.widgets.active.bg_fill = theme.code_background;
     style.visuals.widgets.active.bg_stroke.color = theme.selection;
-    
+
     style.visuals.widgets.hovered.bg_stroke.color = theme.selection;
     style.visuals.widgets.hovered.bg_stroke.width = 1.0;
-    
+
     style.visuals.window_rounding = Rounding::same(0.0);
     style.visuals.widgets.inactive.rounding = Rounding::same(0.0);
     style.visuals.widgets.noninteractive.rounding = Rounding::same(0.0);
