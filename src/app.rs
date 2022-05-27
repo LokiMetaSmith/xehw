@@ -31,10 +31,7 @@ struct Help {
 }
 
 pub struct TemplateApp {
-    xs: Xstate,
-    start_row: isize,
-    num_rows: isize,
-    num_cols: isize,
+    pub xs: Xstate,
     live_code: String,
     trial_code: Option<Xstr>,
     frozen_code: Vec<FrozenStr>,
