@@ -983,11 +983,10 @@ impl TemplateApp {
                     let s = Xbitstr::from(data);
                     self.bin_future.take();
                     self.binary_dropped(s);
-                    return true;
                 }
             }
         }
-        return false;
+        return self.bin_future.is_some();
     }
 
     fn process_file_drop(&mut self, ctx: &egui::Context) -> bool {
