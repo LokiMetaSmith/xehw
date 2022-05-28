@@ -24,6 +24,9 @@ persistence = ["eframe/persistence", "serde"] # Enable if you want to persist ap
 
 [profile.release]
 opt-level = 2 # fast and small wasm
+#codegen-units = 1
+#lto = true
+#strip = "symbols"
 
 [profile.dev]
 debug = false
