@@ -225,6 +225,7 @@ impl TemplateApp {
         let mut canvas_clicked = false;
         let mut open_clicked = false;
         let mut goto_clicked = false;
+        let mut unfreeze_clicked = false;
         let win_rect = ctx.available_rect();
 
         self.theme.theme_ui(ctx, &mut self.theme_editor);
@@ -486,8 +487,11 @@ impl TemplateApp {
                     .add_enabled(!self.is_trial(), Button::new(self.menu_text("💾 Snapshot")))
                     .clicked();
                 rollback_clicked = ui
-                    .add_enabled(rollback_enabled, Button::new(self.menu_text("🔥 Rollback")))
+                    .add_enabled(rollback_enabled, Button::new(self.menu_text("🔨 Rollback")))
                     .clicked();
+                let unfreeze_enabled = self.frozen_code.iter().any(|c| match c { FrozenStr::Code(_) => true, _ => false });
+                unfreeze_clicked = ui.add_enabled(unfreeze_enabled, Button::new(self.menu_text("🔥 Unfreeze")))
+                .clicked();
                 repl_clicked = ui
                     .radio(self.trial_code.is_none(), self.menu_text("REPL"))
                     .clicked();
@@ -891,6 +895,9 @@ impl TemplateApp {
                     }
                     self.canvas.update(ctx, w, h, buf);
                 }
+            }
+            if unfreeze_clicked {
+                self.reload_state();
             }
         });
 
