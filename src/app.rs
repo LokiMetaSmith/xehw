@@ -328,6 +328,7 @@ impl TemplateApp {
                         HelpMode::QuickRef,
                         RichText::new("Quick Reference").heading(),
                     );
+                    ui.hyperlink_to("Youtube Tutorials", "https://www.youtube.com/channel/UCYTeJIi6aLE9rS7s_QOto3w")
                 });
                 match self.help.mode {
                     HelpMode::Hotkeys => {
@@ -536,13 +537,15 @@ impl TemplateApp {
                     let hdr_text = self.hex_offset_str(offset, bs.end());
                     let hdr = Label::new(
                         RichText::new(hdr_text)
-                            .color(self.theme.selection)
+                            .color(self.theme.comment)
                             .underline(),
                     )
                     .sense(Sense::click());
                     if ui.add(hdr).clicked() {
                         self.view_pos = offset;
                     }
+                    let end = self.hex_offset_str(bs.end(), bs.end());
+                    ui.colored_label(self.theme.comment, format!(" of {}",end));
                 });
 
                 for _ in 0..self.num_rows {
