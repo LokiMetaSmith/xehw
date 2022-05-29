@@ -46,6 +46,7 @@ pub fn code_layouter(
 ) -> egui::text::LayoutJob {
     let mut j: egui::text::LayoutJob = Default::default();
     j.text = text.to_string();
+    j.wrap_width = wrap_width;
     let len = text.len();
     let mut slst = Vec::new();
     let mut err_start = 0;
@@ -111,6 +112,5 @@ pub fn code_layouter(
         byte_range: start..len,
         format: TextFormat::simple(font_id.clone(), theme.code),
     });
-    j.wrap_width = wrap_width;
     j
 }
