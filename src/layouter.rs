@@ -69,12 +69,20 @@ pub fn code_layouter(
     let mut start = 0;
     let mut it = slst.into_iter();
     while let Some((p1, dbg)) = it.next() {
+        if !text.is_char_boundary(start) || !text.is_char_boundary(p1) {
+            j.sections.clear();
+            return j;
+        }
         j.sections.push(egui::text::LayoutSection {
             leading_space: 0.0,
             byte_range: start..p1,
             format: TextFormat::simple(font_id.clone(), theme.code),
         });
         let (p2, _) = it.next().unwrap();
+        if !text.is_char_boundary(p2) {
+            j.sections.clear();
+            return j;
+        }
         j.sections.push(egui::text::LayoutSection {
             leading_space: 0.0,
             byte_range: p1..p2,
@@ -93,6 +101,10 @@ pub fn code_layouter(
             },
         });
         start = p2;
+    }
+    if !text.is_char_boundary(start) ||  !text.is_char_boundary(len) {
+        j.sections.clear();
+        return j;
     }
     j.sections.push(egui::text::LayoutSection {
         leading_space: 0.0,
