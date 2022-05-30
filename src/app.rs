@@ -483,15 +483,17 @@ impl TemplateApp {
                     }
                 });
                 run_clicked = ui.button(self.menu_text("▶ Run")).clicked();
-                snapshot_clicked = ui
-                    .add_enabled(!self.is_trial(), Button::new(self.menu_text("💾 Snapshot")))
+                ui.menu_button("State", |ui| {
+                    snapshot_clicked = ui
+                        .add_enabled(!self.is_trial(), Button::new(self.menu_text("💾 Snapshot")))
+                        .clicked();
+                    rollback_clicked = ui
+                        .add_enabled(rollback_enabled, Button::new(self.menu_text("🔨 Rollback")))
+                        .clicked();
+                    let unfreeze_enabled = self.frozen_code.iter().any(|c| match c { FrozenStr::Code(_) => true, _ => false });
+                    unfreeze_clicked = ui.add_enabled(unfreeze_enabled, Button::new(self.menu_text("🔥 Unfreeze")))
                     .clicked();
-                rollback_clicked = ui
-                    .add_enabled(rollback_enabled, Button::new(self.menu_text("🔨 Rollback")))
-                    .clicked();
-                let unfreeze_enabled = self.frozen_code.iter().any(|c| match c { FrozenStr::Code(_) => true, _ => false });
-                unfreeze_clicked = ui.add_enabled(unfreeze_enabled, Button::new(self.menu_text("🔥 Unfreeze")))
-                .clicked();
+                });
                 repl_clicked = ui
                     .radio(self.trial_code.is_none(), self.menu_text("REPL"))
                     .clicked();
@@ -499,12 +501,12 @@ impl TemplateApp {
                     .radio(self.trial_code.is_some(), self.menu_text("TRIAL"))
                     .clicked();
 
-                ui.checkbox(&mut self.rdebug_enabled, "RRecord");
+                ui.checkbox(&mut self.rdebug_enabled, "Reverse");
                 self.xs.set_recording_enabled(self.rdebug_enabled);
                 if self.xs.is_recording() {
                     rnext_enabled = self.rlog_size().map(|n| n > 0).unwrap_or(false);
                     rnext_clicked = ui
-                        .add_enabled(rnext_enabled, Button::new(self.menu_text("↩ Rnext")))
+                        .add_enabled(rnext_enabled, Button::new(self.menu_text("↩ RNext")))
                         .clicked();
                     next_clicked = ui
                         .add_enabled(self.xs.is_running(), Button::new(self.menu_text("↪ Next")))
