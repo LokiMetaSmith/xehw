@@ -329,7 +329,6 @@ impl TemplateApp {
                         HelpMode::QuickRef,
                         RichText::new("Quick Reference").heading(),
                     );
-                    ui.hyperlink_to("Youtube Tutorials", "https://www.youtube.com/channel/UCYTeJIi6aLE9rS7s_QOto3w")
                 });
                 match self.help.mode {
                     HelpMode::Hotkeys => {
@@ -512,10 +511,27 @@ impl TemplateApp {
                         .add_enabled(self.xs.is_running(), Button::new(self.menu_text("↪ Next")))
                         .clicked();
                 }
-                ui.menu_button("Examples", |ui| {
-                    self.menu_examples(ui);
+                ui.menu_button("Help", |ui| {
+                    if ui.button(self.menu_text("Hotkeys")).clicked() {
+                        help_clicked = true;
+                        self.help.mode = HelpMode::Hotkeys;
+                        ui.close_menu();
+                    }
+                    if ui.button(self.menu_text("Index")).clicked() {
+                        help_clicked = true;
+                        self.help.mode = HelpMode::Index;
+                        ui.close_menu();
+                    }
+                    if ui.button(self.menu_text("Quick Reference")).clicked() {
+                        help_clicked = true;
+                        self.help.mode = HelpMode::QuickRef;
+                        ui.close_menu();
+                    }
+                    ui.menu_button("Examples", |ui| {
+                        self.menu_examples(ui);
+                    });
+                    ui.hyperlink_to("Youtube Tutorials", "https://www.youtube.com/channel/UCYTeJIi6aLE9rS7s_QOto3w");
                 });
-                help_clicked = ui.button(self.menu_text("Help")).clicked();
             });
         }); // top panel
 
