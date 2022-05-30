@@ -348,7 +348,7 @@ impl TemplateApp {
                                 add(ui, "Program - Rollback", "(Esc, L)");
                                 add(ui, "Debugger - Next", "(Esc, B)");
                                 add(ui, "Debugger - Reverse Next", "(Esc, N)");
-                                add(ui, "Debugger - Toggle Reverse Next Recording", "(Esc, Y)");
+                                add(ui, "Debugger - Enable Reverse Debugging", "(Esc, Y)");
                                 add(ui, "Hex - Scroll Up", "(Esc, Arrow Up)");
                                 add(ui, "Hex - Scroll Down", "(Esc, Arrow Down)");
                                 add(ui, "Hex - Go To...", "(Esc, G)");
