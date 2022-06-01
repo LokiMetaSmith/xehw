@@ -752,7 +752,7 @@ impl TemplateApp {
                 });
 
             let has_some_code = !self.live_code.trim().is_empty();
-            if !live_has_focus {
+            if !live_has_focus && !self.help.is_open {
                 let n = hotkeys::scroll_view_pressed(ctx, self.num_cols as isize);
                 if n != 0 {
                     self.move_view(n);
