@@ -51,6 +51,7 @@ pub struct TemplateApp {
     bytecode_open: bool,
     goto_open: bool,
     goto_text: String,
+    goto_old_pos: Option<usize>,
     help: Help,
     theme: Theme,
     theme_editor: bool,
@@ -92,6 +93,7 @@ impl Default for TemplateApp {
             bytecode_open: false,
             goto_open: false,
             goto_text: String::new(),
+            goto_old_pos: None,
             help: Help {
                 is_open: false,
                 mode: HelpMode::Hotkeys,
@@ -264,12 +266,8 @@ impl TemplateApp {
             .open(&mut is_goto_open)
             .show(ctx, |ui| {
                 ui.style_mut().visuals.extreme_bg_color = self.theme.code_background;
+                let mut cancel_clicked = ui.input().key_pressed(Key::Escape);
                 let mut ok_clicked = ui.input().key_pressed(Key::Enter);
-                if ui.input().key_pressed(Key::Escape) {
-                    self.goto_open = false;
-                    self.goto_text.clear();
-                    return;
-                }
                 ui.text_edit_singleline(&mut self.goto_text).request_focus();
                 ui.style_mut().visuals.extreme_bg_color = self.theme.border;
                 ui.horizontal(|ui| {
@@ -277,16 +275,22 @@ impl TemplateApp {
                         ok_clicked = true;
                     }
                     if ui.button("Close").clicked() {
-                        self.goto_text.clear();
-                        self.goto_open = false;
+                        cancel_clicked = true;
                     }
                 });
-                let mut tmpxs = Xstate::core().unwrap();
-                let evalgoto = |xs: &mut Xstate, s: &str| {
+                if cancel_clicked {
+                    self.goto_open = false;    
+                    return;
+                }
+                let evalgoto = |s: &str| {
+                    if s.is_empty() {
+                        return Err(Xerr::ExpectingLiteral);
+                    }
+                    let mut xs = Xstate::core()?;
                     xs.eval(s.into())?;
                     xs.pop_data()?.to_xint()
                 };
-                match evalgoto(&mut tmpxs, &self.goto_text) {
+                match evalgoto(&self.goto_text) {
                     Ok(n) => {
                         let bs = self.current_bstr().clone();
                         if n < 0 {
@@ -297,15 +301,21 @@ impl TemplateApp {
                         if ok_clicked {
                             self.goto_text.clear();
                             self.goto_open = false;
+                            self.goto_old_pos.take();
                         }
+                        ui.colored_label(self.theme.text, format!("{}", n));
                     }
                     Err(e) => {
                         ui.colored_label(self.theme.error, format!("{}", e));
                     }
                 }
             });
-        if !is_goto_open {
+        if !is_goto_open || !self.goto_open {
             self.goto_open = false;
+            self.goto_text.clear();
+            if let Some(pos) = self.goto_old_pos.take() {
+                self.view_pos = pos;
+            }
         }
 
         let help_pos = pos2(win_rect.width() * 0.25, win_rect.height() * 0.25);
@@ -752,7 +762,7 @@ impl TemplateApp {
                 });
 
             let has_some_code = !self.live_code.trim().is_empty();
-            if !live_has_focus && !self.help.is_open {
+            if !live_has_focus && !self.help.is_open && !self.goto_open {
                 let n = hotkeys::scroll_view_pressed(ctx, self.num_cols as isize);
                 if n != 0 {
                     self.move_view(n);
@@ -793,6 +803,7 @@ impl TemplateApp {
             }
             if goto_clicked {
                 self.goto_open = true;
+                self.goto_old_pos = Some(self.view_pos);
             }
             if open_clicked {
                 self.open_file_dialog();
