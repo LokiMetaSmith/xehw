@@ -578,11 +578,11 @@ impl TemplateApp {
                 for _ in 0..self.num_rows {
                     let mut addr_text = self.hex_offset_str(from, bs.end());
                     if from >= to {
-                        addr_text.push(':');
                         ui.colored_label(self.theme.comment, addr_text);
                         continue;
                     }
                     ui.horizontal(|ui| {
+                        addr_text.push_str(" ");
                         ui.colored_label(self.theme.comment, addr_text);
                         let mut ascii = String::new();
                         ascii.push_str("  ");
