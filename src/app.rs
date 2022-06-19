@@ -49,6 +49,7 @@ pub struct TemplateApp {
     input_binary: Option<Xbitstr>,
     focus_on_code: bool,
     bytecode_open: bool,
+    notes_open: bool,
     goto_open: bool,
     goto_text: String,
     goto_old_pos: Option<usize>,
@@ -91,6 +92,7 @@ impl Default for TemplateApp {
             focus_on_code: true,
             rdebug_enabled: false,
             bytecode_open: false,
+            notes_open: false,
             goto_open: false,
             goto_text: String::new(),
             goto_old_pos: None,
@@ -114,6 +116,16 @@ impl TemplateApp {
         let mut xs = Xstate::boot().unwrap();
         xs.intercept_stdout(true);
         xeh::d2_plugin::load(&mut xs).unwrap();
+        let init = Cell::from(Xvec::new());
+        let cref = xs.defvar("XEH-PG-NOTES", init).unwrap();
+        xs.defwordself("stick-note", |xs| {
+            let slf = xs.pop_data()?;
+            let cref = Xref::unpack(slf);
+            let x = xs.pop_data()?;
+            let v = xs.get_var(cref)?;
+            let res = v.vec()?.push_back(x);
+            xs.set_var(cref, Cell::from(res))
+        }, cref.pack()).unwrap();
         xs
     }
 
@@ -227,10 +239,27 @@ impl TemplateApp {
         let mut canvas_clicked = false;
         let mut open_clicked = false;
         let mut goto_clicked = false;
+        let mut notes_clicked = false;
         let mut unfreeze_clicked = false;
         let win_rect = ctx.available_rect();
 
         self.theme.theme_ui(ctx, &mut self.theme_editor);
+
+        egui::Window::new("Notes")
+            .open(&mut self.notes_open)
+            .default_pos(pos2(win_rect.right() - 200.0, 200.0))
+            .resizable(true)
+            .vscroll(true)
+            .show(ctx, |ui| {
+                ui.colored_label(self.theme.comment, "Hint: use stick-note word to populate this window");
+                let notes = self.xs.get_var_value("XEH-PG-NOTES").and_then(|x| x.vec()).ok();
+                if let Some(v) = notes {
+                    for i in v.iter() {
+                        let s = self.xs.format_cell(i).unwrap_or_else(|_| "Can't display value".to_string());
+                        ui.colored_label(self.theme.text, s);
+                    }
+                }
+            });
 
         egui::Window::new("Bytecode")
             .open(&mut self.bytecode_open)
@@ -479,6 +508,10 @@ impl TemplateApp {
                 ui.menu_button("View", |ui| {
                     if ui.button(self.menu_text("Go To...")).clicked() {
                         goto_clicked = true;
+                        ui.close_menu();
+                    }
+                    if ui.button(self.menu_text("Notes")).clicked() {
+                        notes_clicked = true;
                         ui.close_menu();
                     }
                     if ui.button(self.menu_text("Canvas")).clicked() {
@@ -795,6 +828,9 @@ impl TemplateApp {
                 if hotkeys::goto_pressed(&ui.input()) {
                     goto_clicked = true;
                 }
+            }
+            if notes_clicked {
+                self.notes_open = true;
             }
             if goto_clicked {
                 self.goto_open = true;
