@@ -469,8 +469,7 @@ impl TemplateApp {
 
         let mut rnext_enabled = false;
         let rollback_enabled = self.snapshot.is_some() && !self.is_trial();
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            ui.horizontal(|ui| {
+        egui::SidePanel::right("menu").show(ctx, |ui| {
                 ui.menu_button("File", |ui| {
                     if ui.button(self.menu_text("Open...")).clicked() {
                         open_clicked = true;
@@ -491,25 +490,22 @@ impl TemplateApp {
                         ui.close_menu();
                     }
                 });
-                run_clicked = ui.button(self.menu_text("▶ Run")).clicked();
-                ui.menu_button("State", |ui| {
-                    snapshot_clicked = ui
-                        .add_enabled(!self.is_trial(), Button::new(self.menu_text("💾 Snapshot")))
-                        .clicked();
-                    rollback_clicked = ui
-                        .add_enabled(rollback_enabled, Button::new(self.menu_text("🔨 Rollback")))
-                        .clicked();
-                    let unfreeze_enabled = self.frozen_code.iter().any(|c| match c { FrozenStr::Code(_) => true, _ => false });
-                    unfreeze_clicked = ui.add_enabled(unfreeze_enabled, Button::new(self.menu_text("🔥 Unfreeze")))
+            run_clicked = ui.button(self.menu_text("🚀 Run")).clicked();
+                snapshot_clicked = ui
+                    .add_enabled(!self.is_trial(), Button::new(self.menu_text("💾 Snapshot")))
                     .clicked();
-                });
+                rollback_clicked = ui
+                    .add_enabled(rollback_enabled, Button::new(self.menu_text("🔨 Rollback")))
+                    .clicked();
+                let unfreeze_enabled = self.frozen_code.iter().any(|c| match c { FrozenStr::Code(_) => true, _ => false });
+                unfreeze_clicked = ui.add_enabled(unfreeze_enabled, Button::new(self.menu_text("🔥 Unfreeze")))
+                .clicked();
                 repl_clicked = ui
                     .radio(self.trial_code.is_none(), self.menu_text("REPL"))
                     .clicked();
                 trial_clicked = ui
                     .radio(self.trial_code.is_some(), self.menu_text("TRIAL"))
                     .clicked();
-
                 ui.checkbox(&mut self.rdebug_enabled, "Reverse");
                 self.xs.set_recording_enabled(self.rdebug_enabled);
                 if self.xs.is_recording() {
@@ -527,12 +523,12 @@ impl TemplateApp {
                         self.help.mode = HelpMode::Hotkeys;
                         ui.close_menu();
                     }
-                    if ui.button(self.menu_text("Index")).clicked() {
+                    if ui.button(self.menu_text("Word Index")).clicked() {
                         help_clicked = true;
                         self.help.mode = HelpMode::Index;
                         ui.close_menu();
                     }
-                    if ui.button(self.menu_text("Quick Reference")).clicked() {
+                    if ui.button(self.menu_text("Quick Ref")).clicked() {
                         help_clicked = true;
                         self.help.mode = HelpMode::QuickRef;
                         ui.close_menu();
@@ -540,9 +536,8 @@ impl TemplateApp {
                     ui.menu_button("Examples", |ui| {
                         self.menu_examples(ui);
                     });
-                    ui.hyperlink_to("Youtube Tutorials", "https://www.youtube.com/channel/UCYTeJIi6aLE9rS7s_QOto3w");
+                    ui.hyperlink_to("Youtube", "https://www.youtube.com/channel/UCYTeJIi6aLE9rS7s_QOto3w");
                 });
-            });
         }); // top panel
 
         egui::SidePanel::left("left_panel").show(ctx, |ui| {
