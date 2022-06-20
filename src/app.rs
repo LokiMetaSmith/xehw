@@ -520,13 +520,16 @@ impl TemplateApp {
                 });
             run_clicked = ui.button(self.menu_text("🚀 Run")).clicked();
                 snapshot_clicked = ui
-                    .add_enabled(!self.is_trial(), Button::new(self.menu_text("💾 Snapshot")))
+                    .add_enabled(!self.is_trial(), Button::new(self.menu_text("💾 Snapshot"))
+                    .wrap(false))
                     .clicked();
                 rollback_clicked = ui
-                    .add_enabled(rollback_enabled, Button::new(self.menu_text("🔨 Rollback")))
+                    .add_enabled(rollback_enabled, Button::new(self.menu_text("🔨 Rollback"))
+                    .wrap(false))
                     .clicked();
                 let unfreeze_enabled = self.frozen_code.iter().any(|c| match c { FrozenStr::Code(_) => true, _ => false });
-                unfreeze_clicked = ui.add_enabled(unfreeze_enabled, Button::new(self.menu_text("🔥 Unfreeze")))
+                unfreeze_clicked = ui.add_enabled(unfreeze_enabled, Button::new(self.menu_text("🔥 Unfreeze"))
+                .wrap(false))
                 .clicked();
                 repl_clicked = ui
                     .radio(self.trial_code.is_none(), self.menu_text("REPL"))
