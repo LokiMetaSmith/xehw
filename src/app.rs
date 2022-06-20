@@ -49,7 +49,8 @@ pub struct TemplateApp {
     input_binary: Option<Xbitstr>,
     focus_on_code: bool,
     bytecode_open: bool,
-    notes_open: bool,
+    vars_open: bool,
+    vars_boot_len: usize,
     goto_open: bool,
     goto_text: String,
     goto_old_pos: Option<usize>,
@@ -73,6 +74,7 @@ const EXAMPLE_TAG: Cell = Cell::Str(arcstr::literal!("example"));
 impl Default for TemplateApp {
     fn default() -> Self {
         let xs = Self::xs_respawn();
+        let vars_boot_len = xs.var_list().len();
         Self {
             xs,
             view_pos: 0,
@@ -92,7 +94,8 @@ impl Default for TemplateApp {
             focus_on_code: true,
             rdebug_enabled: false,
             bytecode_open: false,
-            notes_open: false,
+            vars_open: false,
+            vars_boot_len,
             goto_open: false,
             goto_text: String::new(),
             goto_old_pos: None,
@@ -116,16 +119,6 @@ impl TemplateApp {
         let mut xs = Xstate::boot().unwrap();
         xs.intercept_stdout(true);
         xeh::d2_plugin::load(&mut xs).unwrap();
-        let init = Cell::from(Xvec::new());
-        let cref = xs.defvar("XEH-PG-NOTES", init).unwrap();
-        xs.defwordself("stick-note", |xs| {
-            let slf = xs.pop_data()?;
-            let cref = Xref::unpack(slf);
-            let x = xs.pop_data()?;
-            let v = xs.get_var(cref)?;
-            let res = v.vec()?.push_back(x);
-            xs.set_var(cref, Cell::from(res))
-        }, cref.pack()).unwrap();
         xs
     }
 
@@ -189,6 +182,7 @@ impl TemplateApp {
         if let Some(bin) = &self.input_binary {
             let _ = self.xs.set_binary_input(bin.clone());
         }
+        self.vars_boot_len = self.xs.var_list().len();
         if self.is_trial() {
             self.trial_code = Some(Xstr::new());
             self.snapshot();
@@ -239,25 +233,26 @@ impl TemplateApp {
         let mut canvas_clicked = false;
         let mut open_clicked = false;
         let mut goto_clicked = false;
-        let mut notes_clicked = false;
+        let mut vars_clicked = false;
         let mut unfreeze_clicked = false;
         let win_rect = ctx.available_rect();
 
         self.theme.theme_ui(ctx, &mut self.theme_editor);
 
-        egui::Window::new("Notes")
-            .open(&mut self.notes_open)
+        egui::Window::new("Variables")
+            .open(&mut self.vars_open)
             .default_pos(pos2(win_rect.right() - 200.0, 200.0))
             .resizable(true)
             .vscroll(true)
             .show(ctx, |ui| {
-                ui.colored_label(self.theme.comment, "Hint: use stick-note word to populate this window");
-                let notes = self.xs.get_var_value("XEH-PG-NOTES").and_then(|x| x.vec()).ok();
-                if let Some(v) = notes {
-                    for i in v.iter() {
-                        let s = self.xs.format_cell(i).unwrap_or_else(|_| "Can't display value".to_string());
-                        ui.colored_label(self.theme.text, s);
-                    }
+                let lst = self.xs.var_list();
+                let n = lst.len().checked_sub(self.vars_boot_len).unwrap_or(0);
+                for (name, val) in lst.iter().rev().take(n) {
+                    ui.horizontal(|ui| {
+                        ui.colored_label(self.theme.text, name.to_string());
+                        let s = self.xs.format_cell(val).unwrap_or_else(|_| "Can't display value".to_string());
+                        ui.colored_label(self.theme.code_frozen, s);
+                    });
                 }
             });
 
@@ -387,7 +382,7 @@ impl TemplateApp {
                                 add(ui, "Program - Rollback", "(Esc, L)");
                                 add(ui, "Debugger - Next", "(Esc, B)");
                                 add(ui, "Debugger - Reverse Next", "(Esc, N)");
-                                add(ui, "Debugger - Enable Reverse Debugging", "(Esc, Y)");
+                                add(ui, "Debugger - Enable Reverse Next", "(Esc, Y)");
                                 add(ui, "Hex - Scroll Up", "(Esc, Arrow Up)");
                                 add(ui, "Hex - Scroll Down", "(Esc, Arrow Down)");
                                 add(ui, "Hex - Go To...", "(Esc, G)");
@@ -510,8 +505,8 @@ impl TemplateApp {
                         goto_clicked = true;
                         ui.close_menu();
                     }
-                    if ui.button(self.menu_text("Notes")).clicked() {
-                        notes_clicked = true;
+                    if ui.button(self.menu_text("Variables")).clicked() {
+                        vars_clicked = true;
                         ui.close_menu();
                     }
                     if ui.button(self.menu_text("Canvas")).clicked() {
@@ -829,8 +824,8 @@ impl TemplateApp {
                     goto_clicked = true;
                 }
             }
-            if notes_clicked {
-                self.notes_open = true;
+            if vars_clicked {
+                self.vars_open = true;
             }
             if goto_clicked {
                 self.goto_open = true;
