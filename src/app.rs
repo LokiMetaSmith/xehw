@@ -520,7 +520,7 @@ impl TemplateApp {
                     }
 
                 });
-            run_clicked = ui.button(self.menu_text("🚀Run")).clicked();
+                run_clicked = ui.button(self.menu_text("🚀Run")).clicked();
                 snapshot_clicked = ui
                     .add_enabled(!self.is_trial(), Button::new(self.menu_text("💾Snapshot"))
                     .wrap(false))
