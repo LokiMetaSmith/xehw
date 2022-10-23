@@ -38,7 +38,7 @@ pub struct TemplateApp {
     live_code: String,
     trial_code: Option<Xstr>,
     frozen_code: Vec<FrozenStr>,
-    last_dt: Option<f64>,
+    last_dt: Option<(f64,&'static str)>,
     canvas: Canvas,
     canvas_open: bool,
     debug_token: Option<TokenLocation>,
@@ -725,7 +725,10 @@ impl TemplateApp {
                         } else {
                             let mut s = String::new();
                             write!(s, "OK ").unwrap();
-                            if let Some(secs) = self.last_dt {
+                            if let Some((secs, comment)) = self.last_dt {
+                                if !comment.is_empty() {
+                                    write!(s, "{} ", comment).unwrap();
+                                }
                                 write!(s, "{:.3}s", secs).unwrap();
                             }
                             if let Some(n) = self.rlog_size() {
@@ -857,12 +860,12 @@ impl TemplateApp {
             if rollback_clicked && rollback_enabled {
                 let t = Instant::now();
                 self.rollback();
-                self.last_dt = Some(t.elapsed().as_secs_f64());
+                self.last_dt = Some((t.elapsed().as_secs_f64(), "ROLLBACK"));
             }
             if snapshot_clicked && !self.is_trial() {
                 let t = Instant::now();
                 self.snapshot();
-                self.last_dt = Some(t.elapsed().as_secs_f64());
+                self.last_dt = Some((t.elapsed().as_secs_f64(), "SNAPSHOT"));
             }
 
             if self.is_trial() && repl_clicked {
@@ -874,7 +877,7 @@ impl TemplateApp {
                 let t = Instant::now();
                 self.trial_code = Some(Xstr::new());
                 self.snapshot();
-                self.last_dt = Some(t.elapsed().as_secs_f64());
+                self.last_dt = Some((t.elapsed().as_secs_f64(), ""));
                 self.focus_on_code = true;
                 self.frozen_code.push(FrozenStr::Log(
                     "Trial and error mode, everyting evaluating on-fly!\n\
@@ -895,7 +898,7 @@ impl TemplateApp {
                         let _res = self.xs.evalxstr(xsrc);
                     }
                     self.debug_token = self.xs.location_from_current_ip();
-                    self.last_dt = Some(t.elapsed().as_secs_f64());
+                    self.last_dt = Some((t.elapsed().as_secs_f64(), ""));
                 }
                 if self.xs.last_error().is_some() || self.xs.is_running() {
                     // prevent from saving errorneous code
@@ -920,7 +923,7 @@ impl TemplateApp {
                     self.xs.rnext()
                 };
                 self.debug_token = self.xs.location_from_current_ip();
-                self.last_dt = Some(t.elapsed().as_secs_f64());
+                self.last_dt = Some((t.elapsed().as_secs_f64(), "R/NEXT"));
             } else if run_clicked && has_some_code {
                 let t = Instant::now();
                 let xsrc = if self.is_trial() {
@@ -946,7 +949,7 @@ impl TemplateApp {
                     self.debug_token = self.xs.location_from_current_ip();
                 }
                 self.live_code.clear();
-                self.last_dt = Some(t.elapsed().as_secs_f64());
+                self.last_dt = Some((t.elapsed().as_secs_f64(), ""));
             }
             if next_clicked
                 || rnext_clicked
