@@ -81,6 +81,6 @@ fn zoom_image(zoom: usize, w: usize, h: usize, data: &[u8]) -> ColorImage {
             }
         }
     }
-    assert_eq!(wx * wx * 4, buf.len());
+    assert_eq!(hx * wx * 4, buf.len());
     ColorImage::from_rgba_unmultiplied([wx, hx], &buf)
 }
