@@ -377,7 +377,7 @@ impl TemplateApp {
                             .show(ui, |ui| {
                                 ui.heading("Hotkeys");
                                 add(ui, "Open binary file...", "(Esc, O)");
-                                add(ui, "Program - Run", "(Esc, R)");
+                                add(ui, "Program - Run", "(Esc, R) or (Cmd+Enter) or (Ctrl+Enter)");
                                 add(ui, "Program - Snapshot", "(Esc, S)");
                                 add(ui, "Program - Rollback", "(Esc, L)");
                                 add(ui, "Debugger - Next", "(Esc, B)");
@@ -790,6 +790,12 @@ impl TemplateApp {
                 });
 
             let has_some_code = !self.live_code.trim().is_empty();
+            if live_has_focus || self.focus_on_code {
+                if (ui.input().modifiers.ctrl || ui.input().modifiers.command)
+                 && ui.input().key_pressed(Key::Enter) {
+                    run_clicked = true;
+                }
+            }
             if !live_has_focus && !self.help.is_open && !self.goto_open {
                 let n = hotkeys::scroll_view_pressed(ctx, self.num_cols as isize);
                 if n != 0 {
