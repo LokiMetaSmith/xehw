@@ -38,7 +38,7 @@ pub struct TemplateApp {
     live_code: String,
     trial_code: Option<Xstr>,
     frozen_code: Vec<FrozenStr>,
-    last_dt: Option<(f64,&'static str)>,
+    last_dt: Option<(f64, &'static str)>,
     canvas: Canvas,
     canvas_open: bool,
     debug_token: Option<TokenLocation>,
@@ -250,7 +250,10 @@ impl TemplateApp {
                 for (name, val) in lst.iter().rev().take(n) {
                     ui.horizontal(|ui| {
                         ui.colored_label(self.theme.text, name.to_string());
-                        let s = self.xs.format_cell(val).unwrap_or_else(|_| "Can't display value".to_string());
+                        let s = self
+                            .xs
+                            .format_cell(val)
+                            .unwrap_or_else(|_| "Can't display value".to_string());
                         ui.colored_label(self.theme.code_frozen, s);
                     });
                 }
@@ -303,7 +306,7 @@ impl TemplateApp {
                     }
                 });
                 if cancel_clicked {
-                    self.goto_open = false;    
+                    self.goto_open = false;
                     return;
                 }
                 let evalgoto = |s: &str| {
@@ -377,7 +380,11 @@ impl TemplateApp {
                             .show(ui, |ui| {
                                 ui.heading("Hotkeys");
                                 add(ui, "Open binary file...", "(Esc, O)");
-                                add(ui, "Program - Run", "(Esc, R) or (Cmd+Enter) or (Ctrl+Enter)");
+                                add(
+                                    ui,
+                                    "Program - Run",
+                                    "(Esc, R) or (Cmd+Enter) or (Ctrl+Enter)",
+                                );
                                 add(ui, "Program - Snapshot", "(Esc, S)");
                                 add(ui, "Program - Rollback", "(Esc, L)");
                                 add(ui, "Debugger - Next", "(Esc, B)");
@@ -476,10 +483,6 @@ impl TemplateApp {
                         }
                     }
                     HelpMode::QuickRef => {
-                        ui.hyperlink_to(
-                            "Github README.md",
-                            "https://anykey111.github.io/README.md",
-                        );
                         ScrollArea::vertical()
                             .auto_shrink([false; 2])
                             .show(ui, |ui| {
@@ -518,21 +521,30 @@ impl TemplateApp {
                         self.theme_editor = !self.theme_editor;
                         ui.close_menu();
                     }
-
                 });
                 run_clicked = ui.button(self.menu_text("🚀Run")).clicked();
                 snapshot_clicked = ui
-                    .add_enabled(!self.is_trial(), Button::new(self.menu_text("💾Snapshot"))
-                    .wrap(false))
+                    .add_enabled(
+                        !self.is_trial(),
+                        Button::new(self.menu_text("💾Snapshot")).wrap(false),
+                    )
                     .clicked();
                 rollback_clicked = ui
-                    .add_enabled(rollback_enabled, Button::new(self.menu_text("🔨Rollback"))
-                    .wrap(false))
+                    .add_enabled(
+                        rollback_enabled,
+                        Button::new(self.menu_text("🔨Rollback")).wrap(false),
+                    )
                     .clicked();
-                let unfreeze_enabled = self.frozen_code.iter().any(|c| match c { FrozenStr::Code(_) => true, _ => false });
-                unfreeze_clicked = ui.add_enabled(unfreeze_enabled, Button::new(self.menu_text("🔥Unfreeze"))
-                .wrap(false))
-                .clicked();
+                let unfreeze_enabled = self.frozen_code.iter().any(|c| match c {
+                    FrozenStr::Code(_) => true,
+                    _ => false,
+                });
+                unfreeze_clicked = ui
+                    .add_enabled(
+                        unfreeze_enabled,
+                        Button::new(self.menu_text("🔥Unfreeze")).wrap(false),
+                    )
+                    .clicked();
                 let mut trial_mode = self.trial_code.is_some();
                 if ui.checkbox(&mut trial_mode, "TRIAL").changed() {
                     repl_clicked = !trial_mode;
@@ -565,10 +577,13 @@ impl TemplateApp {
                         self.help.mode = HelpMode::QuickRef;
                         ui.close_menu();
                     }
-                    ui.hyperlink_to("Youtube", "https://www.youtube.com/channel/UCYTeJIi6aLE9rS7s_QOto3w");
+                    ui.hyperlink_to(
+                        "Youtube",
+                        "https://www.youtube.com/channel/UCYTeJIi6aLE9rS7s_QOto3w",
+                    );
+                    ui.hyperlink_to("Github", "https://github.com/anykey111/xeh");
                     ui.add_enabled(false, Label::new("Examples:"));
                     self.menu_examples(ui);
-
                 });
             });
         }); // top panel
@@ -605,7 +620,7 @@ impl TemplateApp {
                         self.view_pos = offset;
                     }
                     let end = self.hex_offset_str(bs.end(), bs.end());
-                    ui.colored_label(self.theme.comment, format!(" of {}",end));
+                    ui.colored_label(self.theme.comment, format!(" of {}", end));
                 });
 
                 for _ in 0..self.num_rows {
@@ -795,7 +810,8 @@ impl TemplateApp {
             let has_some_code = !self.live_code.trim().is_empty();
             if live_has_focus || self.focus_on_code {
                 if (ui.input().modifiers.ctrl || ui.input().modifiers.command)
-                 && ui.input().key_pressed(Key::Enter) {
+                    && ui.input().key_pressed(Key::Enter)
+                {
                     run_clicked = true;
                 }
             }

@@ -103,7 +103,7 @@ pub fn code_layouter(
         });
         start = p2;
     }
-    if !text.is_char_boundary(start) ||  !text.is_char_boundary(len) {
+    if !text.is_char_boundary(start) || !text.is_char_boundary(len) {
         j.sections.clear();
         return j;
     }
