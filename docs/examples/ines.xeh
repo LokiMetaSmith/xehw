@@ -1,4 +1,4 @@
-[ "NES" 0x1a ] magic var hdr
+[ "NES" 0x1a ] >bitstr magic var hdr
 u8 var prg-len
 u8 var chr-len
 u8 var flags6
