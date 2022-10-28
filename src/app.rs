@@ -1042,8 +1042,7 @@ impl TemplateApp {
         if ui.button("iNES ROM").clicked() {
             self.example_request = Some((
                 include_str!("../docs/examples/ines.xeh"),
-                &[],
-                //include_bytes!("../docs/examples/smb.nes"),
+                include_bytes!("../docs/examples/ines.bin"),
             ));
             ui.close_menu();
         }
