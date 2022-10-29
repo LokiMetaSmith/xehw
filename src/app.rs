@@ -695,6 +695,13 @@ impl TemplateApp {
             });
         });
 
+        egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
+            if let Some(err) = self.xs.last_error() {
+                let s = format!("ERROR: {}", err);
+                ui.colored_label(self.theme.error, s);
+            }
+        });
+
         let esc_pressed = ctx.input().key_down(Key::Escape);
         let mut live_has_focus = false;
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -985,7 +992,6 @@ impl TemplateApp {
                 self.reload_state();
             }
         });
-
         // CentralPanel end
     }
 
