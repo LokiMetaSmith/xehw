@@ -1,0 +1,24 @@
+little                          # set little-endian byteorder
+
+# helper word, decode single file entry, return filename and data
+: read-file
+    offset local old-pos        # backup current read position
+    cstr                        # read filename, c-style string
+    56 in-bytes old-pos + seek  # skip filename padding
+    u32                         # offset from the beginnig of the file
+    u32                         # size in bytes
+    swap                        # move offset to top of the stack
+    in-bytes seek               # seek to beginning of the data
+    bytes                       # read file data
+    64 in-bytes old-pos + seek  # seek to the next file header
+;
+
+"PACK" >bitstr magic var ID     # test format identifier
+u32 var tab-pos                 # read offset to the file table    
+u32 var tab-size                # read size of file table in bytes
+
+tab-pos in-bytes seek           # move position to the file table
+tab-size 64 / 0 do              # each file entry is 64 bytes so
+                                # we can calculate number of files ahead
+    [ read-file ] println
+loop

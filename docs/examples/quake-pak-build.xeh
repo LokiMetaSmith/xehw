@@ -1,0 +1,54 @@
+little      # set little-endian byteorder
+
+0 var pak-data-offset
+
+: build-filename
+    local name              # pin name
+    name length local len   # pin length
+    len 56 < assert         # check max length
+    name >bitstr emit       # convert string to binary
+    56 len - 0 do           # fill rest with zeroes
+        0 u8! emit
+    loop
+;
+
+: build-file-info
+    dup 0 get local name
+    1 get local data
+
+    name build-filename
+	pak-data-offset u32! emit
+	data length 8 / dup u32! emit
+	pak-data-offset + ! pak-data-offset
+;
+
+: build-pak
+    local files
+    files length local num-files
+    num-files 64 * local table-size
+    12 local header-size
+
+    "PACK" >bitstr emit        # format identifier
+    header-size u32! emit      # file table offset
+    table-size u32! emit       # file table size
+ 
+    # move offset to the end of the file table
+    table-size header-size + ! pak-data-offset
+ 
+    num-files 0 do             # build file table
+        files I get build-file-info
+    loop
+	
+	num-files 0 do             # save all files data
+		files I get
+		1 get emit             # emit file data
+	loop
+;
+
+[
+    [ "rocknroll.dat" |AC DC| ]
+    [ "hello.dat" "Hello!" >bitstr ]
+] build-pak
+
+# open generated output in the editor for inspection
+output open-input

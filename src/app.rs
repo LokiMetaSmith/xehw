@@ -118,13 +118,14 @@ impl TemplateApp {
     fn xs_respawn() -> Xstate {
         let mut xs = Xstate::boot().unwrap();
         xs.intercept_stdout(true);
+        xs.intercept_output(true).unwrap();
         xeh::d2_plugin::load(&mut xs).unwrap();
         xs
     }
 
     fn load_help(&mut self) {
         self.xs
-            .eval(include_str!("../../xeh/docs/help.xeh"))
+            .eval(include_str!("../../xeh/src/help.xeh"))
             .unwrap();
         let words = self
             .xs
@@ -499,7 +500,7 @@ impl TemplateApp {
         egui::TopBottomPanel::top("menu").show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {
                 ui.menu_button("File", |ui| {
-                    if ui.button(self.menu_text("Open...")).clicked() {
+                    if ui.button(self.menu_text("Open Binary...")).clicked() {
                         open_clicked = true;
                         ui.close_menu();
                     }
@@ -1049,6 +1050,20 @@ impl TemplateApp {
             self.example_request = Some((
                 include_str!("../docs/examples/ines.xeh"),
                 include_bytes!("../docs/examples/ines.bin"),
+            ));
+            ui.close_menu();
+        }
+        if ui.button("Quake1Pak").clicked() {
+            self.example_request = Some((
+                include_str!("../docs/examples/quake-pak.xeh"),
+                include_bytes!("../docs/examples/quake-pak.bin"),
+            ));
+            ui.close_menu();
+        }
+        if ui.button("Quake1Pak Build").clicked() {
+            self.example_request = Some((
+                include_str!("../docs/examples/quake-pak-build.xeh"),
+                &[],
             ));
             ui.close_menu();
         }
