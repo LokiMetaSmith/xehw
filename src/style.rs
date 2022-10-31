@@ -42,7 +42,7 @@ impl Default for Theme {
             text: Color32::from_rgb(0xf0, 0xf0, 0xf0),
             selection_background: Color32::from_rgba_premultiplied(0x0, 0x80, 0x10, 0x30),
             selection: Color32::from_rgb(0x50, 0xce, 0x52),
-            code: Color32::from_rgb(0x41, 0xff, 0x00),
+            code: Color32::from_rgb(0x35, 0xf0, 0x00),
             code_frozen: Color32::from_rgb(0xd0, 0xc0, 0x00),
             code_background: Color32::from_rgb(0x28, 0x28, 0x28),
             comment: Color32::from_rgb(0x9a, 0x9a, 0x9a),
