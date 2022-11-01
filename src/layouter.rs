@@ -1,6 +1,5 @@
 use crate::style::*;
 use eframe::egui;
-use eframe::egui::Color32;
 use eframe::egui::text::TextFormat;
 use xeh::prelude::*;
 
