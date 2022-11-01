@@ -1,5 +1,6 @@
 use crate::style::*;
 use eframe::egui;
+use eframe::egui::Color32;
 use eframe::egui::text::TextFormat;
 use xeh::prelude::*;
 
@@ -90,6 +91,11 @@ pub fn code_layouter(
             format: TextFormat {
                 font_id: font_id.clone(),
                 color: theme.code,
+                background: if dbg == 1 {
+                    theme.debug_marker
+                } else {
+                    theme.code_background
+                },
                 underline: egui::Stroke::new(
                     1.0,
                     if dbg == 1 {
