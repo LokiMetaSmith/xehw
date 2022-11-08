@@ -253,7 +253,7 @@ impl TemplateApp {
                         ui.colored_label(self.theme.text, name.to_string());
                         let s = self
                             .xs
-                            .format_cell(val)
+                            .fmt_cell_safe(val)
                             .unwrap_or_else(|_| "Can't display value".to_string());
                         ui.colored_label(self.theme.code_frozen, s);
                     });
@@ -675,7 +675,7 @@ impl TemplateApp {
                 ui.set_max_width(size1.x);
                 for i in 0.. {
                     if let Some(x) = self.xs.get_data(i) {
-                        let mut s = self.xs.format_cell(x).unwrap();
+                        let mut s = self.xs.fmt_cell_safe(x).unwrap();
                         if s.chars().count() > ncols as usize {
                             s.truncate(ncols as usize - 3);
                             s.push_str("...");
