@@ -49,6 +49,7 @@ pub struct TemplateApp {
     input_binary: Option<Xbitstr>,
     focus_on_code: bool,
     bytecode_open: bool,
+    bytecode_follow: bool,
     vars_open: bool,
     vars_boot_len: usize,
     goto_open: bool,
@@ -94,6 +95,7 @@ impl Default for TemplateApp {
             focus_on_code: true,
             rdebug_enabled: false,
             bytecode_open: false,
+            bytecode_follow: true,
             vars_open: false,
             vars_boot_len,
             goto_open: false,
@@ -265,20 +267,39 @@ impl TemplateApp {
             .default_pos(pos2(200.0, 400.0))
             .vscroll(true)
             .show(ctx, |ui| {
-                //ctx.style_ui(ui);
-                ui.label(format!("ip={}", self.xs.ip()));
+                ui.checkbox(&mut self.bytecode_follow, "Follow current instruction");
                 ui.vertical(|ui| {
-                    for (ip, op) in self.xs.bytecode().iter().enumerate() {
-                        let optext = self.xs.fmt_opcode(ip, op);
-                        let mut rich = RichText::new(format!("{:05x}: {}", ip, optext))
+                    let code = self.xs.bytecode();
+                    let mut lookat = None;
+                    for i in 0..code.len() {
+                        let optext = self.xs.fmt_opcode(i, &code[i]);
+                        let mut rich = RichText::new(format!("{:05x}:   {}", i, optext))
                             .monospace()
                             .color(self.theme.text);
-                        if ip == self.xs.ip() {
+                        if i == self.xs.ip() {
                             rich = rich.background_color(self.theme.border);
                         }
-                        ui.label(rich);
+                        let resp = ui.label(rich);
+                        if i == self.xs.ip() {
+                            lookat = Some(resp.rect);
+                        }
+                    }
+                    if self.xs.ip() == code.len() {
+                        let fmt = RichText::new(
+                            format!("{:05x}: # end of bytecode #", self.xs.ip()))
+                            .monospace()
+                            .color(self.theme.text)
+                            .background_color(self.theme.border);
+                        let rect = ui.label(fmt).rect;
+                        lookat = Some(rect);
+                    }
+                    if self.bytecode_follow {
+                        if let Some(rect) = lookat {
+                            ui.scroll_to_rect(rect, Some(Align::Center));
+                        }
                     }
                 });
+                ui.checkbox(&mut self.bytecode_follow, "Follow current instruction");
             });
 
         Window::new("Canvas")
@@ -512,6 +533,10 @@ impl TemplateApp {
                     }
                     if ui.button(self.menu_text("Variables")).clicked() {
                         vars_clicked = true;
+                        ui.close_menu();
+                    }
+                    if ui.button(self.menu_text("Bytecode")).clicked() {
+                        self.bytecode_open = !self.bytecode_open;
                         ui.close_menu();
                     }
                     if ui.button(self.menu_text("Canvas")).clicked() {
