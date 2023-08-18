@@ -43,7 +43,7 @@ pub struct TemplateApp {
     canvas_open: bool,
     debug_token: Option<TokenLocation>,
     rdebug_enabled: bool,
-    calc_limit: usize,
+    insn_limit: Option<usize>,
     snapshot: Option<(Xstate, Vec<FrozenStr>)>,
     bin_future: Option<Pin<BoxFuture>>,
     input_binary: Option<Xbitstr>,
@@ -88,7 +88,7 @@ impl Default for TemplateApp {
             debug_token: None,
             canvas: Canvas::new(),
             canvas_open: false,
-            calc_limit: 10_000_000,
+            insn_limit: Some(1_000_00),
             snapshot: None,
             bin_future: None,
             input_binary: None,
@@ -943,7 +943,7 @@ impl TemplateApp {
                     let xsrc = Xstr::from(&self.live_code);
                     self.trial_code = Some(xsrc.clone());
                     if has_some_code {
-                        self.xs.set_calc_limit(self.calc_limit).unwrap();
+                        self.xs.set_insn_limit(self.insn_limit).unwrap();
                         let _res = self.xs.evalxstr(xsrc);
                     }
                     self.debug_token = self.xs.location_from_current_ip();
@@ -993,7 +993,7 @@ impl TemplateApp {
                 if self.is_trial() {
                     self.snapshot();
                 } else {
-                    self.xs.set_calc_limit(self.calc_limit).unwrap();
+                                        self.xs.set_insn_limit(self.insn_limit).unwrap();
                     let _ = self.xs.evalxstr(xsrc);
                     self.debug_token = self.xs.location_from_current_ip();
                 }

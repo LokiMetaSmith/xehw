@@ -57,7 +57,7 @@ pub fn copy_rgba(xs: &mut Xstate) -> Xresult1<(usize, usize, Vec<u8>)> {
         xeh::d2_plugin::copy_rgba_data(xs, &mut buf)?;
         Ok((w, h, buf))
     } else {
-        Err(Xerr::OutOfBounds(0))
+        Err(Xerr::OutOfBounds { index: 0, range: 0 })
     }
 }
 
