@@ -9,6 +9,8 @@ mod layouter;
 mod style;
 pub use app::TemplateApp;
 
+/*
+
 // ----------------------------------------------------------------------------
 // When compiling for web:
 
@@ -31,3 +33,4 @@ pub fn start(canvas_id: &str) -> Result<(), eframe::wasm_bindgen::JsValue> {
     let app = TemplateApp::default();
     eframe::start_web(canvas_id, Box::new(app))
 }
+*/

@@ -1,0 +1,25 @@
+little                          # set little-endian byteorder
+
+# helper word, decode single file entry, return filename and data
+: read-file
+    offset local old-pos
+    56 bytes bitstr>utf8 local name
+    u32 local offs          # offset from the beginnig of the file
+    u32 local size                        # size in bytes
+    offs seek
+    size bytes
+    old-pos 64 + seek  # seek to the next file header
+    { "filename" name }
+;
+
+4 bytes "PACK" assert-eq 
+u32 var tab-pos                 # read offset to the file table    
+u32 var tab-size                # read size of file table in bytes
+
+tab-pos  seek                 # move position to the file table
+tab-size 64 / 0 do              # each file entry is 64 bytes so
+                                # we can calculate number of files ahead
+    read-file println
+loop
+
+et

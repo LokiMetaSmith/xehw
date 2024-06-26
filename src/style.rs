@@ -137,7 +137,6 @@ pub fn tune(ctx: &Context, theme: &Theme) {
     style.visuals.window_shadow.extrusion = 1.0;
     style.visuals.button_frame = false;
     style.visuals.override_text_color = Some(theme.text);
-    style.visuals.text_cursor_width = 1.0;
 
     style.visuals.selection.bg_fill = theme.selection_background;
     style.visuals.selection.stroke.color = theme.selection;
@@ -150,6 +149,9 @@ pub fn tune(ctx: &Context, theme: &Theme) {
 
     style.visuals.widgets.noninteractive.bg_fill = theme.background;
     style.visuals.widgets.noninteractive.bg_stroke.width = 0.0;
+
+    style.visuals.window_fill = theme.background;
+    style.visuals.panel_fill = theme.background;
 
     style.visuals.widgets.active.bg_fill = theme.code_background;
     style.visuals.widgets.active.bg_stroke.color = theme.selection;

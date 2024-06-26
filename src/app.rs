@@ -1,11 +1,12 @@
-use eframe::egui::*;
-use eframe::{egui, epi};
+
+use egui::*;
 
 use crate::hotkeys;
 use crate::style::*;
 use crate::{canvas::*, layouter};
 use std::fmt::Write;
 use xeh::prelude::*;
+use xeh::*;
 
 #[cfg(target_arch = "wasm32")]
 type Instant = instant::Instant;
@@ -68,9 +69,9 @@ enum FrozenStr {
     TrialLog(String),
 }
 
-const SECTION_TAG: Cell = Cell::Str(arcstr::literal!("section"));
-const STACK_TAG: Cell = Cell::Str(arcstr::literal!("stack-comment"));
-const EXAMPLE_TAG: Cell = Cell::Str(arcstr::literal!("example"));
+const SECTION_TAG: Cell = xeh_str_lit!("section");
+const STACK_TAG: Cell = xeh_str_lit!("stack-comment");
+const EXAMPLE_TAG: Cell = xeh_str_lit!("example");
 
 impl Default for TemplateApp {
     fn default() -> Self {
@@ -117,6 +118,22 @@ impl Default for TemplateApp {
 }
 
 impl TemplateApp {
+
+    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        // This is also where you can customize the look and feel of egui using
+        // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
+        // Load previous app state (if any).
+        
+        let mut app = TemplateApp::default();
+        #[cfg(feature = "persistence")]
+        if let Some(storage) = cc.storage {
+            app.theme = eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default()
+        }
+        app.load_help();
+
+        return app;
+    }
+
     fn xs_respawn() -> Xstate {
         let mut xs = Xstate::boot().unwrap();
         xs.intercept_stdout(true);
@@ -126,23 +143,23 @@ impl TemplateApp {
     }
 
     fn load_help(&mut self) {
-        self.xs
-            .eval(include_str!("../../xeh/src/help.xeh"))
-            .unwrap();
-        let words = self
-            .xs
-            .word_list()
-            .into_iter()
-            .filter_map(|name| {
-                let s = self.xs.help_str(&name).unwrap_or(&NIL);
-                if s != &NIL {
-                    Some((name, s.clone()))
-                } else {
-                    None
-                }
-            })
-            .collect();
-        self.help.words = words;
+        // self.xs
+        //     .eval(include_str!("../../xeh/src/help.xeh"))
+        //     .unwrap();
+        // let words = self
+        //     .xs
+        //     .word_list()
+        //     .into_iter()
+        //     .filter_map(|name| {
+        //         let s = self.xs.help_str(&name).unwrap_or(&NIL);
+        //         if s != &NIL {
+        //             Some((name, s.clone()))
+        //         } else {
+        //             None
+        //         }
+        //     })
+        //     .collect();
+        // self.help.words = words;
     }
 
     fn move_view(&mut self, nrows: isize) {
@@ -255,7 +272,7 @@ impl TemplateApp {
                         ui.colored_label(self.theme.text, name.to_string());
                         let s = self
                             .xs
-                            .fmt_cell_safe(val)
+                            .format_cell_safe(val)
                             .unwrap_or_else(|_| "Can't display value".to_string());
                         ui.colored_label(self.theme.code_frozen, s);
                     });
@@ -315,8 +332,8 @@ impl TemplateApp {
             .open(&mut is_goto_open)
             .show(ctx, |ui| {
                 ui.style_mut().visuals.extreme_bg_color = self.theme.code_background;
-                let mut cancel_clicked = ui.input().key_pressed(Key::Escape);
-                let mut ok_clicked = ui.input().key_pressed(Key::Enter);
+                let mut cancel_clicked = ui.input(|i| i.key_pressed(Key::Escape));
+                let mut ok_clicked = ui.input(|i| i.key_pressed(Key::Enter));
                 ui.text_edit_singleline(&mut self.goto_text).request_focus();
                 ui.style_mut().visuals.extreme_bg_color = self.theme.border;
                 ui.horizontal(|ui| {
@@ -450,7 +467,7 @@ impl TemplateApp {
                             .show(ui, |ui| {
                                 for (word, help) in &self.help.words {
                                     let section = help
-                                        .get_tagged(&SECTION_TAG)
+                                        .get_tag(&SECTION_TAG)
                                         .and_then(|s| s.str().ok())
                                         .unwrap_or("");
                                     if filter.is_empty()
@@ -461,7 +478,7 @@ impl TemplateApp {
                                             let heading = RichText::new(word.as_str())
                                                 .color(self.theme.selection);
                                             ui.monospace(heading);
-                                            if let Some(t) = help.get_tagged(&STACK_TAG) {
+                                            if let Some(t) = help.get_tag(&STACK_TAG) {
                                                 ui.colored_label(
                                                     self.theme.comment,
                                                     format!(" # ( {:?} ) ", t),
@@ -479,10 +496,10 @@ impl TemplateApp {
                                         if let Ok(s) = help.str() {
                                             ui.label(s);
                                         }
-                                        if let Some(v) = help.tag().and_then(|t| t.vec().ok()) {
-                                            for i in v.iter() {
-                                                if i.tag() == Some(&EXAMPLE_TAG) {
-                                                    let s = i.str().ok().unwrap_or("");
+                                        if let Some(m) = help.tags() {
+                                            for (k, v) in m.iter() {
+                                                if k == &EXAMPLE_TAG {
+                                                    let s = v.str().ok().unwrap_or("");
                                                     let example = RichText::new(s)
                                                         .color(self.theme.code_frozen)
                                                         .background_color(
@@ -619,8 +636,7 @@ impl TemplateApp {
             let total_rows = self.num_rows;
             let text_style = TextStyle::Monospace;
             let font = text_style.resolve(ui.style());
-            let glyph_width = ui.fonts().glyph_width(&font, '0');
-            let row_height = ui.fonts().row_height(&font);
+            let (glyph_width, row_height) = ui.fonts(|f| (f.glyph_width(&font, '0'), f.row_height(&font)));
             let size1 = Vec2::new(ncols as f32 * glyph_width, total_rows as f32 * row_height);
             ui.set_min_width(size1.x);
 
@@ -700,7 +716,7 @@ impl TemplateApp {
                 ui.set_max_width(size1.x);
                 for i in 0.. {
                     if let Some(x) = self.xs.get_data(i) {
-                        let mut s = self.xs.fmt_cell_safe(x).unwrap();
+                        let mut s = self.xs.format_cell_safe(x).unwrap();
                         if s.chars().count() > ncols as usize {
                             s.truncate(ncols as usize - 3);
                             s.push_str("...");
@@ -728,11 +744,11 @@ impl TemplateApp {
             }
         });
 
-        let esc_pressed = ctx.input().key_down(Key::Escape);
+        let esc_pressed = ctx.input(|i| i.key_down(Key::Escape));
         let mut live_has_focus = false;
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::containers::ScrollArea::vertical()
-                .stick_to_bottom()
+                .stick_to_bottom(true)
                 .show(ui, |ui| {
                     let old_spacing = ui.spacing_mut().item_spacing;
                     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
@@ -813,7 +829,7 @@ impl TemplateApp {
                             wrap_width,
                             &self.theme.clone(),
                         );
-                        ui.fonts().layout_job(j)
+                        ui.fonts(|f| f.layout_job(j))
                     };
                     let code_id = Id::new("live");
                     ui.style_mut().visuals.extreme_bg_color = self.theme.code_background;
@@ -833,7 +849,7 @@ impl TemplateApp {
                     self.help.live_cursor = word;
                     if esc_pressed {
                         code.response.surrender_focus();
-                    } else if hotkeys::focus_on_code_pressed(&ctx.input()) || self.focus_on_code {
+                    } else if ctx.input(hotkeys::focus_on_code_pressed) || self.focus_on_code {
                         code.response.request_focus();
                         self.focus_on_code = false;
                     }
@@ -842,8 +858,8 @@ impl TemplateApp {
 
             let has_some_code = !self.live_code.trim().is_empty();
             if live_has_focus || self.focus_on_code {
-                if (ui.input().modifiers.ctrl || ui.input().modifiers.command)
-                    && ui.input().key_pressed(Key::Enter)
+
+                if ui.input(|i| (i.modifiers.ctrl || i.modifiers.command) && i.key_pressed(Key::Enter))
                 {
                     run_clicked = true;
                 }
@@ -853,37 +869,37 @@ impl TemplateApp {
                 if n != 0 {
                     self.move_view(n);
                 }
-                if hotkeys::recording_pressed(ui) {
+                if ui.input(hotkeys::recording_pressed) {
                     self.rdebug_enabled = !self.rdebug_enabled;
                 }
-                if hotkeys::run_pressed(ui) {
+                if ui.input(hotkeys::run_pressed) {
                     run_clicked = true;
                 }
-                if hotkeys::next_pressed(ui) {
+                if ui.input(hotkeys::next_pressed) {
                     next_clicked = true;
                 }
-                if hotkeys::rnext_pressed(ui) {
+                if ui.input(hotkeys::rnext_pressed) {
                     rnext_clicked = true;
                 }
-                if hotkeys::rollback_pressed(ui) {
+                if ui.input(hotkeys::rollback_pressed) {
                     rollback_clicked = true;
                 }
-                if hotkeys::snapshot_pressed(ui) {
+                if ui.input(hotkeys::snapshot_pressed) {
                     snapshot_clicked = true;
                 }
-                if hotkeys::interactive_canvas_pressed(&ctx.input()) {
+                if ctx.input(hotkeys::interactive_canvas_pressed) {
                     canvas_clicked = true;
                 }
-                if hotkeys::help_pressed(&ui.input()) {
+                if ui.input(hotkeys::help_pressed) {
                     help_clicked = true;
                 }
-                if hotkeys::focus_on_code_pressed(&ui.input()) {
+                if ui.input(hotkeys::focus_on_code_pressed) {
                     self.focus_on_code = true;
                 }
-                if hotkeys::file_open_pressed(&ui.input()) {
+                if ui.input(hotkeys::file_open_pressed) {
                     open_clicked = true;
                 }
-                if hotkeys::goto_pressed(&ui.input()) {
+                if ui.input(hotkeys::goto_pressed) {
                     goto_clicked = true;
                 }
             }
@@ -1059,35 +1075,35 @@ impl TemplateApp {
     fn menu_examples(&mut self, ui: &mut Ui) {
         if ui.button("C String").clicked() {
             self.example_request = Some((
-                include_str!("../docs/examples/cstring.xeh"),
-                include_bytes!("../docs/examples/cstring.bin"),
+                include_str!("../assets/examples/cstring.xeh"),
+                include_bytes!("../assets/examples/cstring.bin"),
             ));
             ui.close_menu();
         }
         if ui.button("Gameboy Tile 2BPP").clicked() {
             self.example_request = Some((
-                include_str!("../docs/examples/gb-tile-2bpp.xeh"),
-                include_bytes!("../docs/examples/gb-tile-2bpp.bin"),
+                include_str!("../assets/examples/gb-tile-2bpp.xeh"),
+                include_bytes!("../assets/examples/gb-tile-2bpp.bin"),
             ));
             ui.close_menu();
         }
         if ui.button("iNES ROM").clicked() {
             self.example_request = Some((
-                include_str!("../docs/examples/ines.xeh"),
-                include_bytes!("../docs/examples/ines.bin"),
+                include_str!("../assets/examples/ines.xeh"),
+                include_bytes!("../assets/examples/ines.bin"),
             ));
             ui.close_menu();
         }
         if ui.button("Quake1Pak").clicked() {
             self.example_request = Some((
-                include_str!("../docs/examples/quake-pak.xeh"),
-                include_bytes!("../docs/examples/quake-pak.bin"),
+                include_str!("../assets/examples/quake-pak.xeh"),
+                include_bytes!("../assets/examples/quake-pak.bin"),
             ));
             ui.close_menu();
         }
         if ui.button("Quake1Pak Build").clicked() {
             self.example_request = Some((
-                include_str!("../docs/examples/quake-pak-build.xeh"),
+                include_str!("../assets/examples/quake-pak-build.xeh"),
                 &[],
             ));
             ui.close_menu();
@@ -1130,7 +1146,7 @@ impl TemplateApp {
     }
 
     fn process_file_drop(&mut self, ctx: &egui::Context) -> bool {
-        if let Some(d) = ctx.input().raw.dropped_files.first() {
+        if let Some(d) = ctx.input(|i| i.raw.dropped_files.first().cloned()) {
             if let Some(data) = &d.bytes {
                 let s = Xbitstr::from(data.as_ref().to_owned());
                 self.binary_dropped(s);
@@ -1162,43 +1178,22 @@ fn split_highlight(loc: &TokenLocation) -> (String, String, String) {
     (a, b, c)
 }
 
-impl epi::App for TemplateApp {
-    fn name(&self) -> &str {
-        "XEH"
-    }
+impl eframe::App for TemplateApp {
 
-    fn max_size_points(&self) -> egui::Vec2 {
-        egui::Vec2::new(1280.0, 2048.0)
-    }
-
-    fn clear_color(&self) -> egui::Rgba {
-        egui::Rgba::from_rgba_premultiplied(0.0, 0.0, 0.0, 1.0)
-    }
-
-    /// Called once before the first frame.
-    fn setup(
-        &mut self,
-        _ctx: &egui::Context,
-        _frame: &epi::Frame,
-        storage: Option<&dyn epi::Storage>,
-    ) {
-        #[cfg(feature = "persistence")]
-        if let Some(storage) = storage {
-            self.theme = epi::get_value(storage, epi::APP_KEY).unwrap_or_default()
-        }
-        self.load_help();
+    fn clear_color(&self, _style: &egui::Visuals) -> [f32; 4] {
+       [0.0, 0.0, 0.0, 1.0]
     }
 
     /// Called by the frame work to save state before shutdown.
     /// Note that you must enable the `persistence` feature for this to work.
     #[cfg(feature = "persistence")]
-    fn save(&mut self, storage: &mut dyn epi::Storage) {
-        epi::set_value(storage, epi::APP_KEY, &self.theme);
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        eframe::set_value(storage, eframe::APP_KEY, &self.theme);
     }
 
     /// Called each time the UI needs repainting, which may be many times per second.
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
-    fn update(&mut self, ctx: &egui::Context, _frame: &epi::Frame) {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         crate::style::tune(ctx, &self.theme);
         if let Some((code, data)) = self.example_request.take() {
             self.frozen_code.clear();

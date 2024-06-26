@@ -1,2 +1,6 @@
 /target
+/dist
+.cargo
+.rustup
 .DS_Store
+!.cargo/config.toml

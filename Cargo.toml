@@ -7,12 +7,10 @@ rust-version = "1.56"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[lib]
-crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-egui = "0.17.0"
-eframe = { version = "0.17.0", features = ["persistence"] }
+egui = "0.26.1"
+eframe = { version = "0.26.1", features = ["persistence"] }
 serde = { version = "1", features = ["derive"], optional = true }
 xeh = { path = "../xeh", features = ["calc_limit"], default-features = false } # features = ["mmap"]
 rfd = "0.8.2"
@@ -34,7 +32,7 @@ opt-level = 2 # fast and small wasm
 [patch.crates-io]
 
 # If you fork https://github.com/emilk/egui you can test with:
-eframe = { path = "../egui/eframe", features = ["persistence"] }
+#eframe = { path = "../egui/eframe", features = ["persistence"] }
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -46,3 +44,4 @@ console_error_panic_hook = "0.1.6"
 tracing-wasm = "0.2"
 wasm-bindgen-futures = "0.4.19"
 instant = { version = "0.1.12", features = ["wasm-bindgen"] }
+log = "0.4"

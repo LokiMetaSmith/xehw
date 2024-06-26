@@ -34,17 +34,16 @@ impl Canvas {
             );
         });
         if let Some(texture) = self.tex.as_ref() {
-            let size = texture.size_vec2();
-            ui.image(texture, size);
+            ui.image(texture);
         }
     }
 
     pub fn update(&mut self, ctx: &Context, w: usize, h: usize, buf: Vec<u8>) {
         let image = zoom_image(self.zoom, w, h, &buf);
         if let Some(tex) = self.tex.as_mut() {
-            tex.set(image);
+            tex.set(image, egui::TextureOptions::LINEAR);
         } else {
-            let tex = ctx.load_texture("canvas-texture", image);
+            let tex = ctx.load_texture("canvas-texture", image, egui::TextureOptions::LINEAR);
             self.tex = Some(tex);
         }
     }
@@ -57,7 +56,7 @@ pub fn copy_rgba(xs: &mut Xstate) -> Xresult1<(usize, usize, Vec<u8>)> {
         xeh::d2_plugin::copy_rgba_data(xs, &mut buf)?;
         Ok((w, h, buf))
     } else {
-        Err(Xerr::OutOfBounds { index: 0, range: 0 })
+        Err(Xerr::OutOfBounds { index: 0, range: 0..0 })
     }
 }
 

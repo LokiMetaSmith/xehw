@@ -21,39 +21,39 @@ pub fn help_pressed(i: &InputState) -> bool {
 }
 
 pub fn scroll_view_pressed(ctx: &egui::Context, page_size: isize) -> isize {
-    if ctx.input().key_pressed(egui::Key::ArrowUp) {
+    if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
         -1
-    } else if ctx.input().key_pressed(egui::Key::PageUp) {
+    } else if ctx.input(|i| i.key_pressed(egui::Key::PageUp)) {
         -page_size
-    } else if ctx.input().key_pressed(egui::Key::ArrowDown) {
+    } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
         1
-    } else if ctx.input().key_pressed(egui::Key::PageDown) {
+    } else if ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {
         page_size
     } else {
         0
     }
 }
 
-pub fn recording_pressed(ui: &Ui) -> bool {
-    ui.input().key_pressed(egui::Key::Y)
+pub fn recording_pressed(i: &InputState) -> bool {
+    i.key_pressed(egui::Key::Y)
 }
 
-pub fn snapshot_pressed(ui: &Ui) -> bool {
-    ui.input().key_pressed(egui::Key::S)
+pub fn snapshot_pressed(i: &InputState) -> bool {
+    i.key_pressed(egui::Key::S)
 }
 
-pub fn rollback_pressed(ui: &Ui) -> bool {
-    ui.input().key_pressed(egui::Key::L)
+pub fn rollback_pressed(i: &InputState) -> bool {
+    i.key_pressed(egui::Key::L)
 }
 
-pub fn next_pressed(ui: &Ui) -> bool {
-    ui.input().key_pressed(egui::Key::N)
+pub fn next_pressed(i: &InputState) -> bool {
+    i.key_pressed(egui::Key::N)
 }
 
-pub fn rnext_pressed(ui: &Ui) -> bool {
-    ui.input().key_pressed(egui::Key::B)
+pub fn rnext_pressed(i: &InputState) -> bool {
+    i.key_pressed(egui::Key::B)
 }
 
-pub fn run_pressed(ui: &Ui) -> bool {
-    ui.input().key_pressed(egui::Key::R)
+pub fn run_pressed(i: &InputState) -> bool {
+    i.key_pressed(egui::Key::R)
 }
