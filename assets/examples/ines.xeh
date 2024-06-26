@@ -8,11 +8,11 @@ u8 var flags9
 u8 var flags10
 5 bytes var reserved2
 
-flags6 0b100 bit-and zero? if
+flags6 0b100 band zero? if
     0
 else
     512
-endif
+then
 bytes var tainer-data
 
 offset var prg-offset

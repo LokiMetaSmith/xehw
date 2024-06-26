@@ -4,8 +4,8 @@
 	[ 8 0 do 1 uint loop ] local plane2
 	8 0 do
 		plane1 I get
-		plane2 I get 1 bit-shl
-		bit-or
+		plane2 I get 1 bsl
+		bor
 	loop
 ;
 
