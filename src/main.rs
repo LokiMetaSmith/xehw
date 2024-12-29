@@ -5,13 +5,29 @@
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
-    let mut app = xeh_playground::TemplateApp::default();
-    if let Some(path) = std::env::args().skip(1).next() {
-        xeh::file::fs_overlay::load_binary(&mut app.xs, path.as_str()).unwrap();
-    }
-    let mut native_options = eframe::NativeOptions::default();
-    native_options.drag_and_drop_support = true;
-    eframe::run_native(Box::new(app), native_options);
+    let native_options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([800.0, 600.0])
+            .with_min_inner_size([300.0, 220.0])
+            .with_icon(
+                // NOTE: Adding an icon is optional
+                eframe::icon_data::from_png_bytes(&include_bytes!("../assets/icon-256.png")[..])
+                    .expect("Failed to load icon"),
+            ),
+        ..Default::default()
+    };
+
+    eframe::run_native(
+        "XEH",
+        native_options,
+        Box::new(|cc| {
+            let mut app = xeh_playground::TemplateApp::new(cc);
+            if let Some(path) = std::env::args().skip(1).next() {
+                xeh::file::fs_overlay::load_binary(&mut app.xs, path.as_str()).unwrap();
+            }
+            Box::new(app)
+        })
+    );
 }
 
 #[cfg(target_arch = "wasm32")]

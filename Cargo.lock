@@ -4045,7 +4045,6 @@ dependencies = [
  "eframe",
  "egui",
  "instant",
- "log",
  "rfd",
  "serde",
  "tracing-subscriber",

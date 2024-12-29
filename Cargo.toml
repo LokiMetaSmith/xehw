@@ -44,4 +44,3 @@ console_error_panic_hook = "0.1.6"
 tracing-wasm = "0.2"
 wasm-bindgen-futures = "0.4.19"
 instant = { version = "0.1.12", features = ["wasm-bindgen"] }
-log = "0.4"

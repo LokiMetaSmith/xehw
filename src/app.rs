@@ -685,7 +685,8 @@ impl TemplateApp {
                                         self.theme.code
                                     },
                                 );
-                                ui.label(hex_data);
+                                let hl = Label::new(hex_data).sense(Sense::hover());
+                                ui.add(hl);
                                 let c = xeh::bitstr_ext::byte_to_dump_char(val);
                                 ascii.push(c);
                                 from += n as usize;
