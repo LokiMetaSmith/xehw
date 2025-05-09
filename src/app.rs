@@ -2,11 +2,11 @@
 use egui::*;
 
 use crate::hotkeys;
-use crate::style::*;
 use crate::{canvas::*, layouter};
 use std::fmt::Write;
 use xeh::prelude::*;
 use xeh::*;
+use crate::style::Theme;
 
 #[cfg(target_arch = "wasm32")]
 type Instant = instant::Instant;
@@ -137,7 +137,6 @@ impl TemplateApp {
     fn xs_respawn() -> Xstate {
         let mut xs = Xstate::boot().unwrap();
         xs.intercept_stdout(true);
-        xs.intercept_output(true).unwrap();
         xeh::d2_plugin::load(&mut xs).unwrap();
         xs
     }
@@ -167,12 +166,19 @@ impl TemplateApp {
         self.view_pos = n.min(self.current_bstr().end());
     }
 
+    fn current_input(&self) -> &Xcell {
+        self.xs.eval_named_value("input").unwrap()
+    }
+
     fn current_bstr(&self) -> &Xbitstr {
-        self.xs.get_var_value("input").unwrap().bitstr().unwrap()
+        self.current_input().bitstr().unwrap()
     }
 
     fn current_offset(&self) -> usize {
-        self.xs.get_var_value("offset").unwrap().to_usize().unwrap()
+        self.current_input()
+            .get_tag(&Cell::from("at"))
+            .map(|x| x.to_usize().unwrap())
+            .unwrap_or_default()
     }
 
     fn binary_dropped(&mut self, s: Xbitstr) {
@@ -270,10 +276,7 @@ impl TemplateApp {
                 for (name, val) in lst.iter().rev().take(n) {
                     ui.horizontal(|ui| {
                         ui.colored_label(self.theme.text, name.to_string());
-                        let s = self
-                            .xs
-                            .format_cell_safe(val)
-                            .unwrap_or_else(|_| "Can't display value".to_string());
+                        let s = format!("{:#?}", val);
                         ui.colored_label(self.theme.code_frozen, s);
                     });
                 }
@@ -569,13 +572,13 @@ impl TemplateApp {
                 snapshot_clicked = ui
                     .add_enabled(
                         !self.is_trial(),
-                        Button::new(self.menu_text("💾Snapshot")).wrap(false),
+                        Button::new(self.menu_text("💾Snapshot")),
                     )
                     .clicked();
                 rollback_clicked = ui
                     .add_enabled(
                         rollback_enabled,
-                        Button::new(self.menu_text("🔨Rollback")).wrap(false),
+                        Button::new(self.menu_text("🔨Rollback")),
                     )
                     .clicked();
                 let unfreeze_enabled = self.frozen_code.iter().any(|c| match c {
@@ -585,7 +588,7 @@ impl TemplateApp {
                 unfreeze_clicked = ui
                     .add_enabled(
                         unfreeze_enabled,
-                        Button::new(self.menu_text("🔥Unfreeze")).wrap(false),
+                        Button::new(self.menu_text("🔥Unfreeze")),
                     )
                     .clicked();
                 let mut trial_mode = self.trial_code.is_some();
@@ -717,7 +720,7 @@ impl TemplateApp {
                 ui.set_max_width(size1.x);
                 for i in 0.. {
                     if let Some(x) = self.xs.get_data(i) {
-                        let mut s = self.xs.format_cell_safe(x).unwrap();
+                        let mut s = format!("{:?}", x);
                         if s.chars().count() > ncols as usize {
                             s.truncate(ncols as usize - 3);
                             s.push_str("...");

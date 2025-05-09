@@ -9,8 +9,15 @@ rust-version = "1.56"
 
 
 [dependencies]
-egui = "0.26.1"
-eframe = { version = "0.26.1", features = ["persistence"] }
+egui = "0.30"
+eframe = { version = "0.30", default-features = false, features = [
+    # "accesskit",     # Make egui compatible with screen readers. NOTE: adds a lot of dependencies.
+    "default_fonts", # Embed the default egui fonts.
+    "glow",          # Use the glow rendering backend. Alternative: "wgpu".
+    "persistence",   # Enable restoring app state when restarting the app.
+    # "wayland",       # To support Linux (and CI)
+] }
+log = "0.4"
 serde = { version = "1", features = ["derive"], optional = true }
 xeh = { path = "../xeh", features = ["calc_limit"], default-features = false } # features = ["mmap"]
 rfd = "0.8.2"
@@ -37,6 +44,7 @@ opt-level = 2 # fast and small wasm
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tracing-subscriber = "0.3"
+env_logger = "0.11"
 
 # web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]

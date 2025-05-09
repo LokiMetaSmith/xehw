@@ -5,6 +5,7 @@
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
+    env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([800.0, 600.0])
@@ -25,9 +26,9 @@ fn main() {
             if let Some(path) = std::env::args().skip(1).next() {
                 xeh::file::fs_overlay::load_binary(&mut app.xs, path.as_str()).unwrap();
             }
-            Box::new(app)
+            Ok(Box::new(app))
         })
-    );
+    ).unwrap();
 }
 
 #[cfg(target_arch = "wasm32")]

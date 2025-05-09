@@ -134,7 +134,7 @@ pub fn tune(ctx: &Context, theme: &Theme) {
     style
         .text_styles
         .insert(TextStyle::Monospace, FontId::monospace(theme.font_size));
-    style.visuals.window_shadow.extrusion = 1.0;
+    //style.visuals.window_shadow.extrusion = 1.0;
     style.visuals.button_frame = false;
     style.visuals.override_text_color = Some(theme.text);
 
