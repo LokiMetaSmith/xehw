@@ -26,9 +26,19 @@ impl Canvas {
     pub fn ui(&mut self, ui: &mut Ui, theme: &crate::style::Theme) {
         let size = self.size();
         ui.horizontal(|ui| {
+            let range = 1..=32;
+            ui.separator();
+            if ui.small_button("-").clicked() && &self.zoom > range.start() {
+                self.zoom -= 1;
+            }
+            ui.separator();
+            if ui.small_button("+").clicked() && &self.zoom < range.end() {
+                self.zoom += 1;
+            }
+            ui.separator();
             ui.colored_label(theme.comment, format!("{}x{}", size.x, size.y));
             ui.add(
-                Slider::new(&mut self.zoom, 1..=32)
+                Slider::new(&mut self.zoom, range)
                     .text("zoom")
                     .text_color(theme.comment),
             );
