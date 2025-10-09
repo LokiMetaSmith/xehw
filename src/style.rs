@@ -129,6 +129,8 @@ impl Theme {
 pub fn tune(ctx: &Context, theme: &Theme) {
     let mut style = (*ctx.style()).clone();
     style.visuals = Visuals::light();
+    style.visuals.popup_shadow = Shadow::NONE;
+    style.visuals.window_shadow = Shadow::NONE;
     style.override_text_style = Some(TextStyle::Monospace);
     style.override_font_id = Some(FontId::monospace(theme.font_size));
     style
@@ -142,7 +144,6 @@ pub fn tune(ctx: &Context, theme: &Theme) {
     style.visuals.selection.stroke.color = theme.selection;
 
     style.visuals.extreme_bg_color = theme.border;
-    style.visuals.window_shadow.color = theme.border;
 
     style.visuals.widgets.inactive.bg_stroke.width = 1.0;
     style.visuals.widgets.inactive.bg_stroke.color = theme.border;
