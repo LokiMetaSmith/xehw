@@ -44,6 +44,9 @@ pub struct TemplateApp {
     canvas_open: bool,
     debug_token: Option<TokenLocation>,
     rdebug_enabled: bool,
+    interval_enabled: bool,
+    interval_timer: Instant,
+    interval_word: String,
     insn_limit: Option<usize>,
     snapshot: Option<(Xstate, Vec<FrozenStr>)>,
     bin_future: Option<Pin<BoxFuture>>,
@@ -89,12 +92,15 @@ impl Default for TemplateApp {
             debug_token: None,
             canvas: Canvas::new(),
             canvas_open: false,
-            insn_limit: Some(1_000_00),
+            insn_limit: Some(1_000_000),
             snapshot: None,
             bin_future: None,
             input_binary: None,
             focus_on_code: true,
             rdebug_enabled: false,
+            interval_enabled: false,
+            interval_word: String::new(),
+            interval_timer: Instant::now(),
             bytecode_open: false,
             bytecode_follow: true,
             vars_open: false,
@@ -127,7 +133,8 @@ impl TemplateApp {
         let mut app = TemplateApp::default();
         #[cfg(feature = "persistence")]
         if let Some(storage) = cc.storage {
-            app.theme = eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default()
+            app.theme = eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
+            app.interval_word = eframe::get_value(storage, "interval").unwrap_or_default();
         }
         app.load_help();
 
@@ -271,13 +278,21 @@ impl TemplateApp {
             .resizable(true)
             .vscroll(true)
             .show(ctx, |ui| {
+                for i in self.xs.return_stack.iter().take(1000) {
+                    ui.horizontal(|ui| {
+                        for j in 0..i.locals.len() {
+                            ui.colored_label(self.theme.text, format!("local.{}: ", j));
+                            ui.colored_label(self.theme.text, i.locals[j].format_safe());
+                        }
+                    });
+                    ui.separator();
+                }
                 let lst = self.xs.var_list();
                 let n = lst.len().checked_sub(self.vars_boot_len).unwrap_or(0);
                 for (name, val) in lst.iter().rev().take(n) {
                     ui.horizontal(|ui| {
                         ui.colored_label(self.theme.text, name.to_string());
-                        let s = format!("{:#?}", val);
-                        ui.colored_label(self.theme.code_frozen, s);
+                        ui.colored_label(self.theme.code_frozen, val.format_safe());
                     });
                 }
             });
@@ -631,10 +646,21 @@ impl TemplateApp {
                     ui.add_enabled(false, Label::new("Examples:"));
                     self.menu_examples(ui);
                 });
+                ui.checkbox(&mut self.interval_enabled, "Interval");
+                ui.text_edit_singleline(&mut self.interval_word);
+                let duration = std::time::Duration::from_millis(33);
+                if self.interval_enabled && self.interval_timer < Instant::now() {
+                    let old_meter = self.xs.insn_meter;
+                    let _ = self.xs.run_word(&self.interval_word);
+                    self.xs.insn_meter = old_meter;
+                    self.interval_timer = Instant::now().checked_add(duration).unwrap();
+                }
+                ui.ctx().request_repaint_after(duration);
+                ui.label(format!("{:?}", duration));
             });
         }); // top panel
 
-        egui::SidePanel::left("left_panel").show(ctx, |ui| {
+        egui::SidePanel::left("left_panel").resizable(false).show(ctx, |ui| {
             let ncols = self.num_cols * 4 + 10;
             let total_rows = self.num_rows;
             let text_style = TextStyle::Monospace;
@@ -742,10 +768,7 @@ impl TemplateApp {
         });
 
         egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
-            if let Some(err) = self.xs.last_error() {
-                let s = format!("ERROR: {}", err);
-                ui.colored_label(self.theme.error, s);
-            }
+            self.ui_mini_status(ui, true);
         });
 
         let esc_pressed = ctx.input(|i| i.key_down(Key::Escape));
@@ -783,28 +806,7 @@ impl TemplateApp {
                     let show_trial_error = self.is_trial()
                         && self.xs.last_error().is_some()
                         && self.live_code.trim().len() > 0;
-                    {
-                        // mini status
-                        if let Some(err) = self.xs.last_error() {
-                            if show_trial_error {
-                                let s = format!("ERROR: {}", err);
-                                ui.colored_label(self.theme.error, s);
-                            }
-                        } else {
-                            let mut s = String::new();
-                            write!(s, "OK ").unwrap();
-                            if let Some((secs, comment)) = self.last_dt {
-                                if !comment.is_empty() {
-                                    write!(s, "{} ", comment).unwrap();
-                                }
-                                write!(s, "{:.3}s", secs).unwrap();
-                            }
-                            if let Some(n) = self.rlog_size() {
-                                write!(s, " RLOG {}", n).unwrap();
-                            }
-                            ui.colored_label(self.theme.comment, s);
-                        }
-                    }
+                    self.ui_mini_status(ui, show_trial_error);
                     let mut errtok = None;
                     let mut dbgtok = None;
                     if show_trial_error {
@@ -1049,6 +1051,29 @@ impl TemplateApp {
         self.xs.reverse_log.as_ref().map(|rlog| rlog.len())
     }
 
+    fn ui_mini_status(&self, ui: &mut Ui, show_trial_error: bool) {
+        if let Some(err) = self.xs.last_error() {
+            if show_trial_error {
+                let s = format!("ERROR: {}", err);
+                ui.colored_label(self.theme.error, s);
+            }
+        } else {
+            let mut s = String::new();
+            write!(s, "OK ").unwrap();
+            if let Some((secs, comment)) = self.last_dt {
+                if !comment.is_empty() {
+                    write!(s, "{} ", comment).unwrap();
+                }
+                write!(s, "{:.3}s", secs).unwrap();
+                write!(s, " ({} vminsn)", self.xs.insn_meter).unwrap();
+            }
+            if let Some(n) = self.rlog_size() {
+                write!(s, " RLOG {}", n).unwrap();
+            }
+            ui.colored_label(self.theme.comment, s);
+        }
+    }
+
     fn ui_error_highlight(&self, ui: &mut Ui, loc: &TokenLocation, err: &Xerr) {
         let (a, b, c) = split_highlight(loc);
         ui.horizontal(|ui| {
@@ -1193,6 +1218,7 @@ impl eframe::App for TemplateApp {
     #[cfg(feature = "persistence")]
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, eframe::APP_KEY, &self.theme);
+        eframe::set_value(storage, "interval", &self.interval_word);
     }
 
     /// Called each time the UI needs repainting, which may be many times per second.
