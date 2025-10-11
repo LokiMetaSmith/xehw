@@ -744,25 +744,28 @@ impl TemplateApp {
             egui::containers::ScrollArea::vertical().show(ui, |ui| {
                 ui.set_min_width(size1.x);
                 ui.set_max_width(size1.x);
-                for i in 0.. {
-                    if let Some(x) = self.xs.get_data(i) {
-                        let mut s = format!("{:?}", x);
-                        if s.chars().count() > ncols as usize {
-                            s.truncate(ncols as usize - 3);
-                            s.push_str("...");
-                        }
-                        let color = if i < self.xs.data_depth() {
-                            self.theme.code
-                        } else {
-                            self.theme.code_frozen
-                        };
-                        ui.horizontal(|ui| {
-                            ui.colored_label(self.theme.comment, format!("{:6}:", i));
-                            ui.colored_label(color, s);
-                        });
-                    } else {
+                let mut it = self.xs.data_slice().iter().rev().enumerate();
+                while let Some((i, val)) = it.next() {
+                    if i > 200 {
+                        let rest_len = it.size_hint().0;
+                        ui.colored_label(self.theme.comment, &format!("\n... {} more items on the stack", rest_len));
                         break;
                     }
+                    let mut s = format!("{:?}", val);
+                    if s.chars().count() > ncols as usize {
+                        s.truncate(ncols as usize - 3);
+                        s.push_str("...");
+                    }
+                    let color = if i < self.xs.data_depth() {
+                        self.theme.code
+                    } else {
+                        self.theme.code_frozen
+                    };
+                    ui.horizontal(|ui| {
+                        ui.colored_label(self.theme.comment, format!("{:6}:", i));
+                        ui.colored_label(color, s);
+                    });
+                    
                 }
             });
         });
