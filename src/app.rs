@@ -633,11 +633,6 @@ impl TemplateApp {
                         self.help.mode = HelpMode::QuickRef;
                         ui.close_menu();
                     }
-                    ui.hyperlink_to(
-                        "Youtube",
-                        "https://www.youtube.com/channel/UCYTeJIi6aLE9rS7s_QOto3w",
-                    );
-                    ui.hyperlink_to("Github", "https://github.com/anykey111/xeh");
                     ui.add_enabled(false, Label::new("Examples:"));
                     self.menu_examples(ui);
                 });
