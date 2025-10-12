@@ -1,11 +1,10 @@
-
 : read-2bpp-row
-	[ 8 0 do 1 uint loop ] local plane1
-	[ 8 0 do 1 uint loop ] local plane2
+	[ 8 0 do u1 read loop ] local plane1
+	[ 8 0 do u1 read loop ] local plane2
 	8 0 do
 		plane1 I get
-		plane2 I get 1 bsl
-		bor
+		plane2 I get 1 lshift
+		or
 	loop
 ;
 
