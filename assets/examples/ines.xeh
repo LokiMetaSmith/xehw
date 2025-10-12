@@ -1,21 +1,21 @@
 [ "NES" 0x1a ] >bitstr magic var hdr
-u8 var prg-len
-u8 var chr-len
-u8 var flags6
-u8 var flags7
-u8 var flags8
-u8 var flags9
-u8 var flags10
-5 bytes var reserved2
+u8 read var prg-len
+u8 read var chr-len
+u8 read var flags6
+u8 read var flags7
+u8 read var flags8
+u8 read var flags9
+u8 read var flags10
+5 bytes read var reserved2
 
-flags6 0b100 band zero? if
+flags6 0b100 and zero? if
     0
 else
     512
-then
-bytes var tainer-data
+endif
+bytes read var tainer-data
 
 offset var prg-offset
-prg-len 16384 * bytes var prg-data
+prg-len 16384 * bytes read var prg-data
 offset var chr-offset
-chr-len 8192 * bytes var chr-data
+chr-len 8192 * bytes read var chr-data

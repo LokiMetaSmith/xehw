@@ -25,7 +25,7 @@ enum HelpMode {
 struct Help {
     is_open: bool,
     mode: HelpMode,
-    words: Vec<(Xstr, Cell)>,
+    words: Vec<(Xstr, Xmap)>,
     filter: String,
     live_cursor: Option<String>,
     follow_cursor: bool,
@@ -75,6 +75,7 @@ enum FrozenStr {
 const SECTION_TAG: Cell = xeh_str_lit!("section");
 const STACK_TAG: Cell = xeh_str_lit!("stack-comment");
 const EXAMPLE_TAG: Cell = xeh_str_lit!("example");
+const HELPTEXT_TAG: Cell = xeh_str_lit!("text");
 
 impl Default for TemplateApp {
     fn default() -> Self {
@@ -149,23 +150,20 @@ impl TemplateApp {
     }
 
     fn load_help(&mut self) {
-        // self.xs
-        //     .eval(include_str!("../../xeh/src/help.xeh"))
-        //     .unwrap();
-        // let words = self
-        //     .xs
-        //     .word_list()
-        //     .into_iter()
-        //     .filter_map(|name| {
-        //         let s = self.xs.help_str(&name).unwrap_or(&NIL);
-        //         if s != &NIL {
-        //             Some((name, s.clone()))
-        //         } else {
-        //             None
-        //         }
-        //     })
-        //     .collect();
-        // self.help.words = words;
+        self.xs
+            .eval(include_str!("../../xeh/src/help.xeh"))
+            .unwrap();
+        let help_index = self.xs.eval_named_value("HELP_INDEX").unwrap().xmap().unwrap();
+        let words = self
+            .xs
+            .word_list()
+            .into_iter()
+            .filter_map(|name| {
+                let res = help_index.get(&Cell::from(name.clone()));
+                res.map(|val| (name, val.xmap().unwrap().clone()))
+            })
+            .collect();
+        self.help.words = words;
     }
 
     fn move_view(&mut self, nrows: isize) {
@@ -485,7 +483,7 @@ impl TemplateApp {
                             .show(ui, |ui| {
                                 for (word, help) in &self.help.words {
                                     let section = help
-                                        .get_tag(&SECTION_TAG)
+                                        .get(&SECTION_TAG)
                                         .and_then(|s| s.str().ok())
                                         .unwrap_or("");
                                     if filter.is_empty()
@@ -496,7 +494,7 @@ impl TemplateApp {
                                             let heading = RichText::new(word.as_str())
                                                 .color(self.theme.selection);
                                             ui.monospace(heading);
-                                            if let Some(t) = help.get_tag(&STACK_TAG) {
+                                            if let Some(t) = help.get(&STACK_TAG) {
                                                 ui.colored_label(
                                                     self.theme.comment,
                                                     format!(" # ( {:?} ) ", t),
@@ -511,25 +509,22 @@ impl TemplateApp {
                                                 }
                                             }
                                         });
-                                        if let Ok(s) = help.str() {
+
+                                        if let Some(Ok(s)) = help.get(&HELPTEXT_TAG).map(|x|x.str()) {
                                             ui.label(s);
                                         }
-                                        if let Some(m) = help.tags() {
-                                            for (k, v) in m.iter() {
-                                                if k == &EXAMPLE_TAG {
-                                                    let s = v.str().ok().unwrap_or("");
-                                                    let example = RichText::new(s)
-                                                        .color(self.theme.code_frozen)
-                                                        .background_color(
-                                                            self.theme.code_background,
-                                                        );
-                                                    ui.separator();
-                                                    ui.horizontal(|ui| {
-                                                        ui.separator();
-                                                        ui.monospace(example);
-                                                    });
-                                                }
-                                            }
+                                        if let Some(v) = help.get(&EXAMPLE_TAG) {
+                                            let s = v.str().ok().unwrap_or("");
+                                            let example = RichText::new(s)
+                                                .color(self.theme.code_frozen)
+                                                .background_color(
+                                                    self.theme.code_background,
+                                                );
+                                            ui.separator();
+                                            ui.horizontal(|ui| {
+                                                ui.separator();
+                                                ui.monospace(example);
+                                            });
                                         }
                                         ui.separator();
                                     }
@@ -1112,6 +1107,13 @@ impl TemplateApp {
             ));
             ui.close_menu();
         }
+        if ui.button("Doom Fire").clicked() {
+            self.example_request = Some((
+                include_str!("../assets/examples/doom-fire.xeh"),
+                &[],
+            ));
+            ui.close_menu();
+        }
         if ui.button("Gameboy Tile 2BPP").clicked() {
             self.example_request = Some((
                 include_str!("../assets/examples/gb-tile-2bpp.xeh"),
@@ -1137,6 +1139,13 @@ impl TemplateApp {
             self.example_request = Some((
                 include_str!("../assets/examples/quake-pak-build.xeh"),
                 &[],
+            ));
+            ui.close_menu();
+        }
+        if ui.button("VLQ Integer").clicked() {
+            self.example_request = Some((
+                include_str!("../assets/examples/vint.xeh"),
+                include_bytes!("../assets/examples/vint.bin"),
             ));
             ui.close_menu();
         }

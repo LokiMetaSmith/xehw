@@ -1,0 +1,54 @@
+160 var FIRE_WIDTH
+128 var FIRE_HEIGHT
+
+[
+    0x070707    0x1F0707    0x2F0F07    0x470F07    0x571707    0x671F07
+    0x771F07    0x8F2707    0x9F2F07    0xAF3F07    0xBF4707    0xC74707
+    0xDF4F07    0xDF5707    0xDF5707    0xD75F07    0xD75F07    0xD7670F
+    0xCF6F0F    0xCF770F    0xCF7F0F    0xCF8717    0xC78717    0xC78F17
+    0xC7971F    0xBF9F1F    0xBF9F1F    0xBFA727    0xBFA727    0xBFAF2F
+    0xB7AF2F    0xB7B72F    0xB7B737    0xCFCF6F    0xDFDF9F    0xEFEFC7
+    0xFFFFFF
+] var PALETTE
+
+PALETTE d2-palette!
+
+FIRE_WIDTH FIRE_HEIGHT d2-resize
+d2-clear
+
+FIRE_HEIGHT 0 do
+    I FIRE_HEIGHT 1 - = if 36 else 0 endif
+    d2-color!
+	FIRE_WIDTH 0 do
+		I J d2-data!
+	loop
+loop
+
+: rand_color 
+    2 random * integer - 0 max
+;
+
+: rand_x_spread
+    1 random * round integer - 0 max
+;
+
+: spread_fire
+    I let x
+	FIRE_HEIGHT J - let y
+	x y d2-data let color 
+	PALETTE color position
+    rand_color d2-color!
+	x rand_x_spread integer
+    y 1 - d2-data!
+;
+
+: update_fire
+    FIRE_HEIGHT 1 do
+        FIRE_WIDTH 0 do
+            spread_fire
+        loop
+    loop
+;
+
+\ put update in the `Inteval:` field or call several times
+update_fire

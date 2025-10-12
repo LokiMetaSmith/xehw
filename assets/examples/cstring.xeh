@@ -1,2 +1,9 @@
-# read bytes until zero
-[ begin u8 dup zero? until ] println
+\ read bytes until zero
+[ begin u8 read dup zero? until ] println
+
+\ reset position
+0 seek 
+\ use builtin template
+cstr read println
+
+

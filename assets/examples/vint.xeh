@@ -1,0 +1,13 @@
+: decode-vlq
+    0
+    begin
+        7 lshift
+        u1 read
+        swap
+        u7 read or
+        swap zero?
+    until
+;
+
+decode-vlq 16383 assert-eq
+
