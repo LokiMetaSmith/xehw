@@ -150,10 +150,10 @@ impl TemplateApp {
     }
 
     fn load_help(&mut self) {
-        self.xs
-            .eval(include_str!("../../xeh/src/help.xeh"))
-            .unwrap();
-        let help_index = self.xs.eval_named_value("HELP_INDEX").unwrap().xmap().unwrap();
+        let mut tmp_xs = Xstate::core().unwrap();
+        tmp_xs.eval(include_str!("../../xeh/src/help.xeh")).unwrap();
+        let help_data = tmp_xs.pop_data().unwrap();
+        let help_index = help_data.xmap().unwrap();
         let words = self
             .xs
             .word_list()
