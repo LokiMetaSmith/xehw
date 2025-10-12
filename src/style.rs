@@ -117,7 +117,7 @@ impl Theme {
     pub fn theme_ui(&mut self, ctx: &Context, open_flag: &mut bool) {
         let style = ctx.style().clone();
         let mut style2 = (*style).clone();
-        style2.visuals = Visuals::light();
+        style2.visuals = Visuals::dark();
         ctx.set_style(style2);
         Window::new("Theme").open(open_flag).show(ctx, |ui| {
             self.ui(ui);
@@ -128,7 +128,7 @@ impl Theme {
 
 pub fn tune(ctx: &Context, theme: &Theme) {
     let mut style = (*ctx.style()).clone();
-    style.visuals = Visuals::light();
+    style.visuals = Visuals::dark();
     style.visuals.popup_shadow = Shadow::NONE;
     style.visuals.window_shadow = Shadow::NONE;
     style.override_text_style = Some(TextStyle::Monospace);
