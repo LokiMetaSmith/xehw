@@ -27,7 +27,6 @@ impl Canvas {
         let size = self.size();
         ui.horizontal(|ui| {
             let range = 1..=32;
-            ui.separator();
             if ui.small_button("-").clicked() && &self.zoom > range.start() {
                 self.zoom -= 1;
             }
@@ -35,13 +34,7 @@ impl Canvas {
             if ui.small_button("+").clicked() && &self.zoom < range.end() {
                 self.zoom += 1;
             }
-            ui.separator();
             ui.colored_label(theme.comment, format!("{}x{}", size.x, size.y));
-            ui.add(
-                Slider::new(&mut self.zoom, range)
-                    .text("zoom")
-                    .text_color(theme.comment),
-            );
         });
         if let Some(texture) = self.tex.as_ref() {
             ui.image(texture);

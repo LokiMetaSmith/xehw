@@ -130,7 +130,6 @@ impl TemplateApp {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
         // Load previous app state (if any).
-        
         let mut app = TemplateApp::default();
         #[cfg(feature = "persistence")]
         if let Some(storage) = cc.storage {
@@ -464,7 +463,7 @@ impl TemplateApp {
                             let edit = TextEdit::singleline(&mut self.help.filter);
                             ui.add_enabled(!self.help.follow_cursor, edit);
                             ui.style_mut().visuals.extreme_bg_color = self.theme.border;
-                            ui.checkbox(&mut self.help.follow_cursor, "Follow Editor Cursor");
+                            ui.checkbox(&mut self.help.follow_cursor, "Follow");
                         });
                         let filter = if self.help.follow_cursor {
                             self.help
@@ -637,7 +636,7 @@ impl TemplateApp {
                     self.menu_examples(ui);
                 });
                 ui.checkbox(&mut self.interval_enabled, "Interval");
-                ui.text_edit_singleline(&mut self.interval_word);
+                ui.add(TextEdit::singleline(&mut self.interval_word).desired_width(100.0));
                 let duration = std::time::Duration::from_millis(33);
                 if self.interval_enabled && self.interval_timer < Instant::now() {
                     let old_meter = self.xs.insn_meter;
