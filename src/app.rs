@@ -93,7 +93,7 @@ impl Default for TemplateApp {
             debug_token: None,
             canvas: Canvas::new(),
             canvas_open: false,
-            insn_limit: Some(1_000_000),
+            insn_limit: Some(10_000_000),
             snapshot: None,
             bin_future: None,
             input_binary: None,
