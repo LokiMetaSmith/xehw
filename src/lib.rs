@@ -3,6 +3,7 @@
 #![warn(clippy::all, rust_2018_idioms)]
 
 mod agent;
+mod collab;
 mod app;
 mod canvas;
 mod hotkeys;
