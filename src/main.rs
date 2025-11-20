@@ -27,8 +27,9 @@ fn main() {
                 xeh::file::fs_overlay::load_binary(&mut app.xs, path.as_str()).unwrap();
             }
             Ok(Box::new(app))
-        })
-    ).unwrap();
+        }),
+    )
+    .unwrap();
 }
 
 #[cfg(target_arch = "wasm32")]
