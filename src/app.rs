@@ -1,8 +1,10 @@
 use egui::*;
 
+use crate::agent::{AgentConfig, AgentRole, AgentSystem};
 use crate::hotkeys;
 use crate::style::Theme;
 use crate::{canvas::*, layouter};
+use crate::style::Theme;
 use std::fmt::Write;
 use xeh::prelude::*;
 use xeh::*;
@@ -62,6 +64,12 @@ pub struct TemplateApp {
     theme: Theme,
     theme_editor: bool,
     example_request: Option<(&'static str, &'static [u8])>,
+    // Agent System
+    agent_system: AgentSystem,
+    agents_open: bool,
+    todo_open: bool,
+    agent_paste_buffer: String,
+    new_task_buffer: String,
 }
 
 #[derive(Clone)]
@@ -119,6 +127,11 @@ impl Default for TemplateApp {
             theme: Theme::default(),
             theme_editor: false,
             example_request: None,
+            agent_system: AgentSystem::default(),
+            agents_open: false,
+            todo_open: false,
+            agent_paste_buffer: String::new(),
+            new_task_buffer: String::new(),
         }
     }
 }
@@ -135,7 +148,8 @@ impl TemplateApp {
             app.interval_word = eframe::get_value(storage, "interval").unwrap_or_default();
         }
         app.load_help();
-
+        // Pre-populate some tasks/agents for demo
+        // app.agent_system.add_task("Analyze codebase structure".to_string());
         return app;
     }
 
@@ -265,7 +279,79 @@ impl TemplateApp {
         let mut unfreeze_clicked = false;
         let win_rect = ctx.available_rect();
 
+        // Poll Agent System
+        self.agent_system.poll(ctx.input(|i| i.time), &self.live_code);
+
+        // Apply pending changes from agents
+        while let Some((aid, code)) = self.agent_system.pending_changes.pop_front() {
+            // 1. Snapshot BEFORE modification for Undo safety
+            if !self.is_trial() {
+                self.snapshot();
+            }
+
+            if let Some(agent) = self.agent_system.agents.get(&aid) {
+                self.frozen_code.push(FrozenStr::Log(format!("\n# Agent {} wrote code", agent.config.name)));
+            }
+            self.live_code.push_str("\n");
+            self.live_code.push_str(&code);
+            self.frozen_code.push(FrozenStr::Code(Xsubstr::from(&code)));
+        }
+
         self.theme.theme_ui(ctx, &mut self.theme_editor);
+
+        // Agents UI
+        egui::Window::new("🤖 Agent Swarm")
+            .open(&mut self.agents_open)
+            .default_pos(pos2(win_rect.right() - 400.0, 100.0))
+            .vscroll(true)
+            .show(ctx, |ui| {
+                self.agent_system.ui_agents(ui);
+                ui.separator();
+                ui.heading("Configuration");
+                ui.label("Paste config (Name:Key) one per line:");
+                ui.add(egui::TextEdit::multiline(&mut self.agent_paste_buffer).desired_rows(3));
+                if ui.button("Add Agents").clicked() {
+                    for line in self.agent_paste_buffer.lines() {
+                        let parts: Vec<&str> = line.split(':').collect();
+                        if parts.len() >= 2 {
+                            self.agent_system.add_agent(AgentConfig {
+                                name: parts[0].trim().to_string(),
+                                role: AgentRole::Generalist,
+                                api_key: parts[1].trim().to_string(),
+                                base_url: "http://localhost:11434".to_string(),
+                                model: "llama3".to_string(),
+                            });
+                        }
+                    }
+                    self.agent_paste_buffer.clear();
+                }
+                ui.separator();
+                ui.heading("Logs");
+                egui::ScrollArea::vertical().id_source("agent_logs").max_height(150.0).show(ui, |ui| {
+                    for msg in &self.agent_system.message_log {
+                        ui.label(RichText::new(msg).monospace().size(10.0));
+                    }
+                });
+            });
+
+        egui::Window::new("📝 ToDo List")
+            .open(&mut self.todo_open)
+            .default_pos(pos2(win_rect.right() - 400.0, 400.0))
+            .vscroll(true)
+            .show(ctx, |ui| {
+                self.agent_system.ui_tasks(ui);
+                ui.separator();
+                ui.horizontal(|ui| {
+                    ui.text_edit_singleline(&mut self.new_task_buffer);
+                    if ui.button("Add Task").clicked() {
+                        if !self.new_task_buffer.is_empty() {
+                            self.agent_system
+                                .add_task(self.new_task_buffer.clone());
+                            self.new_task_buffer.clear();
+                        }
+                    }
+                });
+            });
 
         egui::Window::new("Variables")
             .open(&mut self.vars_open)
@@ -572,6 +658,16 @@ impl TemplateApp {
                     }
                     if ui.button(self.menu_text("Theme")).clicked() {
                         self.theme_editor = !self.theme_editor;
+                        ui.close_menu();
+                    }
+                });
+                ui.menu_button("Agents", |ui| {
+                    if ui.button(self.menu_text("Dashboard")).clicked() {
+                        self.agents_open = !self.agents_open;
+                        ui.close_menu();
+                    }
+                    if ui.button(self.menu_text("ToDo List")).clicked() {
+                        self.todo_open = !self.todo_open;
                         ui.close_menu();
                     }
                 });
