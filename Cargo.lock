@@ -2884,6 +2884,7 @@ checksum = "0ef33da6b1660b4ddbfb3aef0ade110c8b8a781a3b6382fa5f2b5b040fd55f61"
 [[package]]
 name = "xeh"
 version = "0.1.0"
+source = "git+https://github.com/anykey111/xeh#7a0a84fc9b16d81b56b99337ec3099c5c2ae6163"
 dependencies = [
  "arcstr",
  "base32",

@@ -18,7 +18,6 @@ You are an expert Rust software engineer for this project.
   - Build System: Cargo
 - **File Structure:**
   - `src/` – Application source code.
-  - `../xeh/` – Local helper crate dependency (sibling directory).
   - `assets/` – Static assets for the application.
   - `imgs/` – Screenshots and images for documentation.
   - `Cargo.toml` – Project manifest.
@@ -61,7 +60,7 @@ pub fn add(a: i32, b: i32) -> i32 {
 
 ## Boundaries
 - ✅ **Always:**
-  - Write code in `src/` or `xeh/`.
+  - Write code in `src/`.
   - Run `cargo clippy` and `cargo fmt` before submitting changes.
   - Ensure code compiles with `cargo check`.
 - ⚠️ **Ask first:**

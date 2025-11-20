@@ -17,7 +17,7 @@ eframe = { version = "0.30", default-features = false, features = [
 ] }
 log = "0.4"
 serde = { version = "1", features = ["derive"], optional = true }
-xeh = { path = "../xeh", features = ["calc_limit"], default-features = false } # features = ["mmap"]
+xeh = { git = "https://github.com/anykey111/xeh", features = ["calc_limit"], default-features = false } # features = ["mmap"]
 rfd = "0.8.2"
 arcstr = "1.1.3"
 
