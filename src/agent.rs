@@ -1,5 +1,5 @@
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, VecDeque, HashSet};
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 use eframe::egui::{self, Color32};
@@ -20,7 +20,7 @@ pub enum AgentStatus {
     Error(String),
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AgentConfig {
     pub name: String,
     pub role: AgentRole,
@@ -29,6 +29,7 @@ pub struct AgentConfig {
     pub model: String,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Agent {
     pub id: Uuid,
     pub config: AgentConfig,
@@ -61,6 +62,7 @@ pub enum AgentEvent {
 
 pub struct AgentSystem {
     pub agents: HashMap<Uuid, Agent>,
+    pub local_ids: HashSet<Uuid>,
     pub tasks: Vec<Task>,
     pub locks: HashMap<Uuid, Uuid>,
     pub message_log: VecDeque<String>,
@@ -73,6 +75,7 @@ impl Default for AgentSystem {
     fn default() -> Self {
         Self {
             agents: HashMap::new(),
+            local_ids: HashSet::new(),
             tasks: Vec::new(),
             locks: HashMap::new(),
             message_log: VecDeque::new(),
@@ -94,6 +97,7 @@ impl AgentSystem {
             cursor_idx: None,
             snapshot: None,
         });
+        self.local_ids.insert(id);
         self.log(format!("Agent added: {}", self.agents.get(&id).unwrap().config.name));
     }
 
@@ -140,7 +144,7 @@ impl AgentSystem {
                         if let Some(tid) = agent.current_task_id {
                              if let Some(t) = self.tasks.iter_mut().find(|t| t.id == tid) {
                                  t.status = TaskStatus::Done;
-                                 self.log(format!("{} finished task.", agent.config.name));
+                                 self.message_log.push_back(format!("{} finished task.", agent.config.name));
                              }
                         }
                         agent.current_task_id = None;
@@ -152,7 +156,7 @@ impl AgentSystem {
                 AgentEvent::LlmError(aid, err) => {
                     if let Some(agent) = self.agents.get_mut(&aid) {
                         agent.status = AgentStatus::Error(err.clone());
-                        self.log(format!("Agent {} error: {}", agent.config.name, err));
+                        self.message_log.push_back(format!("Agent {} error: {}", agent.config.name, err));
                     }
                 }
             }
@@ -166,7 +170,7 @@ impl AgentSystem {
 
         // 3. Assign Tasks
         let idle_agents: Vec<Uuid> = self.agents.iter()
-            .filter(|(_, a)| a.status == AgentStatus::Idle)
+            .filter(|(id, a)| self.local_ids.contains(id) && a.status == AgentStatus::Idle)
             .map(|(id, _)| *id)
             .collect();
 
@@ -201,14 +205,16 @@ impl AgentSystem {
     fn spawn_llm_request(&self, agent_id: Uuid, config: AgentConfig, task: &str, code: &str) {
         let prompt = format!("Task: {}\nCode:\n{}", task, code);
 
-        let request = ehttp::Request::json(
+        let body_json = serde_json::json!({
+            "model": config.model,
+            "prompt": prompt,
+            "stream": false
+        });
+        let mut request = ehttp::Request::post(
             format!("{}/api/generate", config.base_url),
-            &serde_json::json!({
-                "model": config.model,
-                "prompt": prompt,
-                "stream": false
-            })
+            serde_json::to_vec(&body_json).unwrap_or_default(),
         );
+        request.headers.insert("Content-Type".to_string(), "application/json".to_string());
 
         let queue_clone = self.event_queue.clone();
 

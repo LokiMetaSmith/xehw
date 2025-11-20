@@ -1,10 +1,11 @@
 use egui::*;
 
 use crate::agent::{AgentConfig, AgentRole, AgentSystem};
+use crate::collab::{CollabSystem, CollabMessage};
 use crate::hotkeys;
 use crate::style::Theme;
+use uuid::Uuid;
 use crate::{canvas::*, layouter};
-use crate::style::Theme;
 use std::fmt::Write;
 use xeh::prelude::*;
 use xeh::*;
@@ -70,6 +71,12 @@ pub struct TemplateApp {
     todo_open: bool,
     agent_paste_buffer: String,
     new_task_buffer: String,
+    // Collaboration
+    collab_system: CollabSystem,
+    collab_url: String,
+    collab_open: bool,
+    last_agent_sync: f64,
+    my_uuid: Uuid,
 }
 
 #[derive(Clone)]
@@ -132,6 +139,11 @@ impl Default for TemplateApp {
             todo_open: false,
             agent_paste_buffer: String::new(),
             new_task_buffer: String::new(),
+            collab_system: CollabSystem::default(),
+            collab_url: "ws://localhost:8080".to_string(),
+            collab_open: false,
+            last_agent_sync: 0.0,
+            my_uuid: Uuid::new_v4(),
         }
     }
 }
@@ -161,20 +173,8 @@ impl TemplateApp {
     }
 
     fn load_help(&mut self) {
-        let mut tmp_xs = Xstate::core().unwrap();
-        tmp_xs.eval(include_str!("../../xeh/src/help.xeh")).unwrap();
-        let help_data = tmp_xs.pop_data().unwrap();
-        let help_index = help_data.xmap().unwrap();
-        let words = self
-            .xs
-            .word_list()
-            .into_iter()
-            .filter_map(|name| {
-                let res = help_index.get(&Cell::from(name.clone()));
-                res.map(|val| (name, val.xmap().unwrap().clone()))
-            })
-            .collect();
-        self.help.words = words;
+        // Help loading disabled in playground mode
+        self.help.words = Vec::new();
     }
 
     fn move_view(&mut self, nrows: isize) {
@@ -282,6 +282,37 @@ impl TemplateApp {
         // Poll Agent System
         self.agent_system.poll(ctx.input(|i| i.time), &self.live_code);
 
+        // Poll Collab System
+        let mut code_changed_remotely = false;
+        let msgs = self.collab_system.poll();
+        for msg in msgs {
+            match msg {
+                CollabMessage::Hello { id, name } => {
+                    self.collab_system.peers.insert(id, name);
+                }
+                CollabMessage::Code { text } => {
+                    if self.live_code != text {
+                        self.live_code = text;
+                        code_changed_remotely = true;
+                    }
+                }
+                CollabMessage::AgentUpdate { agents, tasks } => {
+                    for agent in agents {
+                        if !self.agent_system.local_ids.contains(&agent.id) {
+                            self.agent_system.agents.insert(agent.id, agent);
+                        }
+                    }
+                    for task in tasks {
+                        if let Some(existing) = self.agent_system.tasks.iter_mut().find(|t| t.id == task.id) {
+                            *existing = task;
+                        } else {
+                            self.agent_system.tasks.push(task);
+                        }
+                    }
+                }
+            }
+        }
+
         // Apply pending changes from agents
         while let Some((aid, code)) = self.agent_system.pending_changes.pop_front() {
             // 1. Snapshot BEFORE modification for Undo safety
@@ -298,6 +329,29 @@ impl TemplateApp {
         }
 
         self.theme.theme_ui(ctx, &mut self.theme_editor);
+
+        // Collab UI
+        egui::Window::new("Network Connection")
+            .open(&mut self.collab_open)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("URL:");
+                    ui.text_edit_singleline(&mut self.collab_url);
+                    if ui.button("Connect").clicked() {
+                        self.collab_system.connect(&self.collab_url, ctx);
+                        self.collab_system.send(CollabMessage::Hello {
+                            id: self.my_uuid,
+                            name: "User".to_string(),
+                        });
+                    }
+                });
+                ui.label(format!("Status: {}", self.collab_system.status));
+                ui.separator();
+                ui.heading("Peers");
+                for (id, name) in &self.collab_system.peers {
+                    ui.label(format!("{} ({})", name, id));
+                }
+            });
 
         // Agents UI
         egui::Window::new("🤖 Agent Swarm")
@@ -623,7 +677,7 @@ impl TemplateApp {
                             .show(ui, |ui| {
                                 ui.style_mut().visuals.extreme_bg_color =
                                     self.theme.code_background;
-                                ui.monospace(include_str!("../../xeh/README.md"));
+                                ui.monospace(include_str!("../README.md"));
                             });
                     }
                 }
@@ -636,6 +690,12 @@ impl TemplateApp {
                 ui.menu_button("File", |ui| {
                     if ui.button(self.menu_text("Open Binary...")).clicked() {
                         open_clicked = true;
+                        ui.close_menu();
+                    }
+                });
+                ui.menu_button("Network", |ui| {
+                    if ui.button(self.menu_text("Connection...")).clicked() {
+                        self.collab_open = !self.collab_open;
                         ui.close_menu();
                     }
                 });
@@ -942,7 +1002,27 @@ impl TemplateApp {
                         self.focus_on_code = false;
                     }
                     live_has_focus = code.response.has_focus();
+
+                    if code.response.changed() && !code_changed_remotely {
+                        if self.collab_system.is_connected() {
+                            self.collab_system.send(CollabMessage::Code { text: self.live_code.clone() });
+                        }
+                    }
                 });
+
+            // Sync Agents
+            if self.collab_system.is_connected() {
+                let t = ctx.input(|i| i.time);
+                if t - self.last_agent_sync > 1.0 {
+                    self.last_agent_sync = t;
+                    let local_agents: Vec<_> = self.agent_system.agents.values()
+                        .filter(|a| self.agent_system.local_ids.contains(&a.id))
+                        .cloned()
+                        .collect();
+                    let tasks = self.agent_system.tasks.clone();
+                    self.collab_system.send(CollabMessage::AgentUpdate { agents: local_agents, tasks });
+                }
+            }
 
             let has_some_code = !self.live_code.trim().is_empty();
             if live_has_focus || self.focus_on_code {
