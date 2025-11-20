@@ -1,12 +1,11 @@
-
 use egui::*;
 
 use crate::hotkeys;
+use crate::style::Theme;
 use crate::{canvas::*, layouter};
 use std::fmt::Write;
 use xeh::prelude::*;
 use xeh::*;
-use crate::style::Theme;
 
 #[cfg(target_arch = "wasm32")]
 type Instant = instant::Instant;
@@ -125,7 +124,6 @@ impl Default for TemplateApp {
 }
 
 impl TemplateApp {
-
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
@@ -317,11 +315,11 @@ impl TemplateApp {
                         }
                     }
                     if self.xs.ip() == code.len() {
-                        let fmt = RichText::new(
-                            format!("{:05x}: # end of bytecode #", self.xs.ip()))
-                            .monospace()
-                            .color(self.theme.text)
-                            .background_color(self.theme.border);
+                        let fmt =
+                            RichText::new(format!("{:05x}: # end of bytecode #", self.xs.ip()))
+                                .monospace()
+                                .color(self.theme.text)
+                                .background_color(self.theme.border);
                         let rect = ui.label(fmt).rect;
                         lookat = Some(rect);
                     }
@@ -509,16 +507,16 @@ impl TemplateApp {
                                             }
                                         });
 
-                                        if let Some(Ok(s)) = help.get(&HELPTEXT_TAG).map(|x|x.str()) {
+                                        if let Some(Ok(s)) =
+                                            help.get(&HELPTEXT_TAG).map(|x| x.str())
+                                        {
                                             ui.label(s);
                                         }
                                         if let Some(v) = help.get(&EXAMPLE_TAG) {
                                             let s = v.str().ok().unwrap_or("");
                                             let example = RichText::new(s)
                                                 .color(self.theme.code_frozen)
-                                                .background_color(
-                                                    self.theme.code_background,
-                                                );
+                                                .background_color(self.theme.code_background);
                                             ui.separator();
                                             ui.horizontal(|ui| {
                                                 ui.separator();
@@ -579,26 +577,17 @@ impl TemplateApp {
                 });
                 run_clicked = ui.button(self.menu_text("🚀Run")).clicked();
                 snapshot_clicked = ui
-                    .add_enabled(
-                        !self.is_trial(),
-                        Button::new(self.menu_text("💾Snapshot")),
-                    )
+                    .add_enabled(!self.is_trial(), Button::new(self.menu_text("💾Snapshot")))
                     .clicked();
                 rollback_clicked = ui
-                    .add_enabled(
-                        rollback_enabled,
-                        Button::new(self.menu_text("🔨Rollback")),
-                    )
+                    .add_enabled(rollback_enabled, Button::new(self.menu_text("🔨Rollback")))
                     .clicked();
                 let unfreeze_enabled = self.frozen_code.iter().any(|c| match c {
                     FrozenStr::Code(_) => true,
                     _ => false,
                 });
                 unfreeze_clicked = ui
-                    .add_enabled(
-                        unfreeze_enabled,
-                        Button::new(self.menu_text("🔥Unfreeze")),
-                    )
+                    .add_enabled(unfreeze_enabled, Button::new(self.menu_text("🔥Unfreeze")))
                     .clicked();
                 let mut trial_mode = self.trial_code.is_some();
                 if ui.checkbox(&mut trial_mode, "TRIAL").changed() {
@@ -649,115 +638,120 @@ impl TemplateApp {
             });
         }); // top panel
 
-        egui::SidePanel::left("left_panel").resizable(false).show(ctx, |ui| {
-            let ncols = self.num_cols * 4 + 10;
-            let total_rows = self.num_rows;
-            let text_style = TextStyle::Monospace;
-            let font = text_style.resolve(ui.style());
-            let (glyph_width, row_height) = ui.fonts(|f| (f.glyph_width(&font, '0'), f.row_height(&font)));
-            let size1 = Vec2::new(ncols as f32 * glyph_width, total_rows as f32 * row_height);
-            ui.set_min_width(size1.x);
+        egui::SidePanel::left("left_panel")
+            .resizable(false)
+            .show(ctx, |ui| {
+                let ncols = self.num_cols * 4 + 10;
+                let total_rows = self.num_rows;
+                let text_style = TextStyle::Monospace;
+                let font = text_style.resolve(ui.style());
+                let (glyph_width, row_height) =
+                    ui.fonts(|f| (f.glyph_width(&font, '0'), f.row_height(&font)));
+                let size1 = Vec2::new(ncols as f32 * glyph_width, total_rows as f32 * row_height);
+                ui.set_min_width(size1.x);
 
-            let xgrid = ui.vertical(|ui| {
-                let offset = self.current_offset();
-                let mut from = self.view_pos;
-                let bs = self.current_bstr().seek(from).unwrap_or_default();
-                let mut it = bs.iter8();
-                let visible_bits = self.num_rows * self.num_cols * 8;
-                let to = bs.end().min(from + visible_bits);
-                ui.spacing_mut().item_spacing = vec2(0.0, 2.0);
-                ui.spacing_mut().interact_size = vec2(0.0, 0.0);
+                let xgrid = ui.vertical(|ui| {
+                    let offset = self.current_offset();
+                    let mut from = self.view_pos;
+                    let bs = self.current_bstr().seek(from).unwrap_or_default();
+                    let mut it = bs.iter8();
+                    let visible_bits = self.num_rows * self.num_cols * 8;
+                    let to = bs.end().min(from + visible_bits);
+                    ui.spacing_mut().item_spacing = vec2(0.0, 2.0);
+                    ui.spacing_mut().interact_size = vec2(0.0, 0.0);
 
-                ui.horizontal(|ui| {
-                    let hdr_text = self.hex_offset_str(offset, bs.end());
-                    let hdr = Label::new(
-                        RichText::new(hdr_text)
-                            .color(self.theme.comment)
-                            .underline(),
-                    )
-                    .sense(Sense::click());
-                    if ui.add(hdr).clicked() {
-                        self.view_pos = offset;
+                    ui.horizontal(|ui| {
+                        let hdr_text = self.hex_offset_str(offset, bs.end());
+                        let hdr = Label::new(
+                            RichText::new(hdr_text)
+                                .color(self.theme.comment)
+                                .underline(),
+                        )
+                        .sense(Sense::click());
+                        if ui.add(hdr).clicked() {
+                            self.view_pos = offset;
+                        }
+                        let end = self.hex_offset_str(bs.end(), bs.end());
+                        ui.colored_label(self.theme.comment, format!(" of {}", end));
+                    });
+
+                    for _ in 0..self.num_rows {
+                        let mut addr_text = self.hex_offset_str(from, bs.end());
+                        if from >= to {
+                            ui.colored_label(self.theme.comment, addr_text);
+                            continue;
+                        }
+                        ui.horizontal(|ui| {
+                            addr_text.push_str(" ");
+                            ui.colored_label(self.theme.comment, addr_text);
+                            let mut ascii = String::new();
+                            ascii.push_str("  ");
+                            for i in 0..self.num_cols {
+                                if let Some((val, n)) = it.next() {
+                                    let hex_data = RichText::new(format!(" {:02x}", val)).color(
+                                        if from < offset {
+                                            self.theme.code_frozen
+                                        } else {
+                                            self.theme.code
+                                        },
+                                    );
+                                    let hl = Label::new(hex_data).sense(Sense::hover());
+                                    ui.add(hl);
+                                    let c = xeh::bitstr_ext::byte_to_dump_char(val);
+                                    ascii.push(c);
+                                    from += n as usize;
+                                } else {
+                                    let n = (self.num_cols - i) as usize;
+                                    let mut pad = String::with_capacity(n * 3);
+                                    for _ in 0..n {
+                                        pad.push_str("   ");
+                                        ascii.push(' ');
+                                    }
+                                    ui.colored_label(self.theme.comment, pad);
+                                    break;
+                                }
+                            }
+                            ui.colored_label(self.theme.comment, ascii);
+                        });
                     }
-                    let end = self.hex_offset_str(bs.end(), bs.end());
-                    ui.colored_label(self.theme.comment, format!(" of {}", end));
                 });
 
-                for _ in 0..self.num_rows {
-                    let mut addr_text = self.hex_offset_str(from, bs.end());
-                    if from >= to {
-                        ui.colored_label(self.theme.comment, addr_text);
-                        continue;
-                    }
-                    ui.horizontal(|ui| {
-                        addr_text.push_str(" ");
-                        ui.colored_label(self.theme.comment, addr_text);
-                        let mut ascii = String::new();
-                        ascii.push_str("  ");
-                        for i in 0..self.num_cols {
-                            if let Some((val, n)) = it.next() {
-                                let hex_data = RichText::new(format!(" {:02x}", val)).color(
-                                    if from < offset {
-                                        self.theme.code_frozen
-                                    } else {
-                                        self.theme.code
-                                    },
-                                );
-                                let hl = Label::new(hex_data).sense(Sense::hover());
-                                ui.add(hl);
-                                let c = xeh::bitstr_ext::byte_to_dump_char(val);
-                                ascii.push(c);
-                                from += n as usize;
-                            } else {
-                                let n = (self.num_cols - i) as usize;
-                                let mut pad = String::with_capacity(n * 3);
-                                for _ in 0..n {
-                                    pad.push_str("   ");
-                                    ascii.push(' ');
-                                }
-                                ui.colored_label(self.theme.comment, pad);
-                                break;
-                            }
+                let resp = xgrid.response.interact(egui::Sense::drag());
+                let v = resp.drag_delta();
+                self.move_view(v.y as isize);
+
+                ui.colored_label(self.theme.comment, "Stack:");
+
+                egui::containers::ScrollArea::vertical().show(ui, |ui| {
+                    ui.set_min_width(size1.x);
+                    ui.set_max_width(size1.x);
+                    let mut it = self.xs.data_slice().iter().rev().enumerate();
+                    while let Some((i, val)) = it.next() {
+                        if i > 200 {
+                            let rest_len = it.size_hint().0;
+                            ui.colored_label(
+                                self.theme.comment,
+                                &format!("\n... {} more items on the stack", rest_len),
+                            );
+                            break;
                         }
-                        ui.colored_label(self.theme.comment, ascii);
-                    });
-                }
-            });
-
-            let resp = xgrid.response.interact(egui::Sense::drag());
-            let v = resp.drag_delta();
-            self.move_view(v.y as isize);
-
-            ui.colored_label(self.theme.comment, "Stack:");
-
-            egui::containers::ScrollArea::vertical().show(ui, |ui| {
-                ui.set_min_width(size1.x);
-                ui.set_max_width(size1.x);
-                let mut it = self.xs.data_slice().iter().rev().enumerate();
-                while let Some((i, val)) = it.next() {
-                    if i > 200 {
-                        let rest_len = it.size_hint().0;
-                        ui.colored_label(self.theme.comment, &format!("\n... {} more items on the stack", rest_len));
-                        break;
+                        let mut s = format!("{:?}", val);
+                        if s.chars().count() > ncols as usize {
+                            s.truncate(ncols as usize - 3);
+                            s.push_str("...");
+                        }
+                        let color = if i < self.xs.data_depth() {
+                            self.theme.code
+                        } else {
+                            self.theme.code_frozen
+                        };
+                        ui.horizontal(|ui| {
+                            ui.colored_label(self.theme.comment, format!("{:6}:", i));
+                            ui.colored_label(color, s);
+                        });
                     }
-                    let mut s = format!("{:?}", val);
-                    if s.chars().count() > ncols as usize {
-                        s.truncate(ncols as usize - 3);
-                        s.push_str("...");
-                    }
-                    let color = if i < self.xs.data_depth() {
-                        self.theme.code
-                    } else {
-                        self.theme.code_frozen
-                    };
-                    ui.horizontal(|ui| {
-                        ui.colored_label(self.theme.comment, format!("{:6}:", i));
-                        ui.colored_label(color, s);
-                    });
-                    
-                }
+                });
             });
-        });
 
         egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
             self.ui_mini_status(ui, true);
@@ -856,9 +850,9 @@ impl TemplateApp {
 
             let has_some_code = !self.live_code.trim().is_empty();
             if live_has_focus || self.focus_on_code {
-
-                if ui.input(|i| (i.modifiers.ctrl || i.modifiers.command) && i.key_pressed(Key::Enter))
-                {
+                if ui.input(|i| {
+                    (i.modifiers.ctrl || i.modifiers.command) && i.key_pressed(Key::Enter)
+                }) {
                     run_clicked = true;
                 }
             }
@@ -1007,7 +1001,7 @@ impl TemplateApp {
                 if self.is_trial() {
                     self.snapshot();
                 } else {
-                                        self.xs.set_insn_limit(self.insn_limit).unwrap();
+                    self.xs.set_insn_limit(self.insn_limit).unwrap();
                     let _ = self.xs.evalxstr(xsrc);
                     self.debug_token = self.xs.location_from_current_ip();
                 }
@@ -1102,10 +1096,7 @@ impl TemplateApp {
             ui.close_menu();
         }
         if ui.button("Doom Fire").clicked() {
-            self.example_request = Some((
-                include_str!("../assets/examples/doom-fire.xeh"),
-                &[],
-            ));
+            self.example_request = Some((include_str!("../assets/examples/doom-fire.xeh"), &[]));
             ui.close_menu();
         }
         if ui.button("Gameboy Tile 2BPP").clicked() {
@@ -1130,10 +1121,8 @@ impl TemplateApp {
             ui.close_menu();
         }
         if ui.button("Quake1Pak Build").clicked() {
-            self.example_request = Some((
-                include_str!("../assets/examples/quake-pak-build.xeh"),
-                &[],
-            ));
+            self.example_request =
+                Some((include_str!("../assets/examples/quake-pak-build.xeh"), &[]));
             ui.close_menu();
         }
         if ui.button("VLQ Integer").clicked() {
@@ -1214,9 +1203,8 @@ fn split_highlight(loc: &TokenLocation) -> (String, String, String) {
 }
 
 impl eframe::App for TemplateApp {
-
     fn clear_color(&self, _style: &egui::Visuals) -> [f32; 4] {
-       [0.0, 0.0, 0.0, 1.0]
+        [0.0, 0.0, 0.0, 1.0]
     }
 
     /// Called by the frame work to save state before shutdown.
