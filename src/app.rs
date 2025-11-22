@@ -173,8 +173,20 @@ impl TemplateApp {
     }
 
     fn load_help(&mut self) {
-        // Help loading disabled in playground mode
-        self.help.words = Vec::new();
+        let mut tmp_xs = Xstate::core().unwrap();
+        tmp_xs.eval(include_str!("../assets/help.xeh")).unwrap();
+        let help_data = tmp_xs.pop_data().unwrap();
+        let help_index = help_data.xmap().unwrap();
+        let words = self
+            .xs
+            .word_list()
+            .into_iter()
+            .filter_map(|name| {
+                let res = help_index.get(&Cell::from(name.clone()));
+                res.map(|val| (name, val.xmap().unwrap().clone()))
+            })
+            .collect();
+        self.help.words = words;
     }
 
     fn move_view(&mut self, nrows: isize) {
@@ -381,7 +393,7 @@ impl TemplateApp {
                 }
                 ui.separator();
                 ui.heading("Logs");
-                egui::ScrollArea::vertical().id_source("agent_logs").max_height(150.0).show(ui, |ui| {
+                egui::ScrollArea::vertical().id_salt("agent_logs").max_height(150.0).show(ui, |ui| {
                     for msg in &self.agent_system.message_log {
                         ui.label(RichText::new(msg).monospace().size(10.0));
                     }
