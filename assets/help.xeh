@@ -1,0 +1,630 @@
+#(
+
+: doc-for-core "text" "Core" "section" ;
+: doc-for-arith "text" "Arithmetic" "section" ;
+: doc-for-loop "text" "Conditional Loops" "section" ;
+: doc-for-stack "text" "Stack Manipulation" "section" ;
+: doc-for-cond "text" "Conditional Execution" "section" ;
+: doc-for-tags "text" "Tags" "section" ;
+: doc-for-bitstr "text" "Binary Parsing" "section" ;
+: doc-for-fmt "text" "Formatting" "section" ;
+: doc-for-doc "text" "Documentation" "section" ;
+: doc-for-bitwise "text" "Bitwise Arithmetic" "section" ;
+: doc-for-d2 "text" "2D Canvas" "section" ;
+
+: doc!
+\(
+    dup str? not if
+        error
+    endif
+    over map? not if
+        error
+    endif
+\)
+;
+
+: stack-comment "stack-comment" ;
+: doc-example "example" ;
+
+{
+
+{ "Insert tag." doc-for-tags
+    "val tag-name tag-val -- val" stack-comment
+} "insert-tag" doc!
+
+{ "Get tag by name, returns tag-val or nil." doc-for-tags
+    "val tag-name -- tag-val" stack-comment
+} "get-tag" doc!
+
+{ "Remove tag by name." doc-for-tags
+    "val tag-name -- val" stack-comment
+} "remove-tag" doc!
+
+{ "Replace tags." doc-for-tags
+    "val tags -- val" stack-comment
+} "with-tags" doc!
+
+{ "Get all tags as map." doc-for-tags
+    "val -- tags" stack-comment
+} "tags" doc!
+
+{ "Add list of tags" doc-for-tags
+    "100 ^{ \"u8\" . \"type\" 8 . \"size\" ^}" doc-example
+} dup "^{" doc! swap "^}" doc!
+
+{ "Execute code if flag is true, otherwise jump to \"then\".
+    FLAG if CODE then" doc-for-cond
+} "if" doc!
+
+{ "Fallback for the \"if\" conditional branch. Executed when flag is false.
+    FLAG if CODE else FALLBACK then" doc-for-cond
+} "else" doc!
+
+{ "End of the \"if\" conditional branch." doc-for-cond
+} "endif" doc!
+
+{ "Select one case of the multiple different choices.
+    X case
+        X1 of CODE1 endof
+        XN of CODEN endof
+        DEFAULT
+    endcase
+Compare X with X1, if X equals to X1 then CODE1 is executed.
+Compare X with XN, if X equals to XN then CODEN is executed.
+Otherwise DEFAULT is executed." doc-for-cond
+} dup "of" doc! swap "case" doc!
+
+{ "End of the \"case\" conditional select." doc-for-cond
+} "endcase" doc!
+
+{ "End of the single case selection." doc-for-cond
+} "endof" doc!
+
+{ "Loop with pre-condition.
+    begin FLAG while CODE repeat
+If FLAG is true CODE is executed and loop is restarted from \"begin\".
+IF FLAG is false execution continue after the \"repeat\".
+The FLAG is tested on every loop iteration.
+Endless loop
+    begin CODE repeat
+" doc-for-loop
+} dup "begin" doc!
+  swap dup "while" doc!
+  swap "repeat" doc!
+
+{ "Loop with post-condition.
+    begin CODE FLAG until
+Restart loop until flag is false." doc-for-loop
+} "until" doc!
+
+{ "Leave the innermost loop immediatly." doc-for-loop
+} "leave" doc!
+
+{ "Loop for every integer starting from START and up to, but excluding LIMIT.
+    LIMIT START do CODE loop
+The current loop index can be accessed with I.
+J is used to access the outer loop index and the outermost loop index is K." doc-for-loop
+
+"10 0 do \".\" println loop" doc-example
+"5 var num-rows
+10 var num-columns
+num-rows 0 do
+    num-columns do
+        \"row=\" print J print
+        \"col=\" print I println
+    loop
+loop" doc-example
+} dup "do" doc! swap "loop" doc!
+
+{ "Innermost loop index" doc-for-loop
+ "-- int" stack-comment } "I" doc!
+
+{ "Outer loop index" doc-for-loop
+ "-- int" stack-comment } "J" doc!
+
+{ "Outermost loop index" doc-for-loop
+ "-- int" stack-comment } "K" doc!
+
+{ "For each loop" doc-for-loop
+"\\ vector iteration
+[ 1 2 ] foreach println loop
+\\ string chars iteration
+\"abc\" foreach println loop
+\\ bitstring bits iteration
+|f0| foreach println loop
+\\ map key-value iteration
+{ 1 2 } foreach
+     println \\ key
+     println \\ value
+loop" doc-example } "foreach" doc!
+
+{ "Binary data under inspection." doc-for-bitstr
+    "-- bitstr" stack-comment
+} "input" doc!
+
+{ "Number of bits consumed." doc-for-bitstr
+    "-- int" stack-comment
+} "offset" doc!
+
+{ "Number of bits remain unread." doc-for-bitstr
+"-- int" stack-comment
+} "remain" doc!
+
+{ "Set bitstr as default binary input." doc-for-bitstr
+    "bitstr --" stack-comment
+} "open-input" doc!
+
+{ "Close current binary input, restore the previous one from oh-hold." doc-for-bitstr
+ } "close-input" doc!
+
+{ "Open new output stream" doc-for-bitstr "--" stack-comment } "open-output" doc!
+{ "Close output stream" doc-for-bitstr "-- bitstr" stack-comment } "close-output" doc!
+{ "Bitstring length" doc-for-bitstr "bitstr -- int" stack-comment } "bitstr-len" doc!
+{ "Concatenate bitstrings" doc-for-bitstr "bitstr bitstr -- bitstr" stack-comment } "bitstr-append" doc!
+{ "Bitwise invert" doc-for-bitstr "bitstr -- bitstr" stack-comment } "bitstr-not" doc!
+{ "Bitwise AND" doc-for-bitstr "bitstr bitstr -- bitstr" stack-comment } "bitstr-and" doc!
+{ "Bitwise OR" doc-for-bitstr "bitstr bitstr -- bitstr" stack-comment } "bitstr-or" doc!
+{ "Bitwise XOR" doc-for-bitstr "bitstr bitstr -- bitstr" stack-comment } "bitstr-xor" doc!
+{ "Parse base 16 string, ignore whitespaces." doc-for-core "str -- bitstr" stack-comment
+    "\"ff FF 11\" hex>bitstr" doc-example } "hex>bytes" doc!
+
+{ "Convert bitstr into string" doc-for-core "bitstr -- str" stack-comment } "bytes>hex" doc!
+{ "Execute command line and read the output into bitstr" doc-for-bitstr
+    "str -- bitstr" stack-comment  } "exec-piped" doc!
+
+{ "Peek value from current bitstring input" doc-for-core "map -- val" stack-comment
+    "u16 peek" doc-example } "peek" doc!
+{ "Pack value into bitstring" doc-for-core "val map -- val" stack-comment
+    "127 u16 pack" doc-example } "pack" doc!
+{ "Unpack value from the bitstring" doc-for-core "bitstr map -- val" stack-comment
+    "|ff| u8 unpack" doc-example  } "unpack" doc!
+
+{ "Reposition offset." doc-for-bitstr
+    "int --" stack-comment
+} "seek" doc!
+
+{ "Convert size in bytes to the number of bits." doc-for-bitstr
+    "int -- int" stack-comment
+} ">b" doc!
+
+{ "Convert size in kilobytes to the number of bits." doc-for-bitstr
+    "int -- int" stack-comment
+} ">kb" doc!
+
+{ "Convert size in megabytes to the number of bits." doc-for-bitstr
+    "int -- int" stack-comment
+} ">mb" doc!
+
+{ "Decode UTF-8 string from bitstr." doc-for-bitstr
+    "bitstr -- str" stack-comment
+    "|C3 9F| bitstr>utf8" doc-example
+} "bitstr>utf8" doc!
+
+{ "Pack string or vector into bitstr.
+Vector can contains integers in range of 0 to 255 representing
+single byte, another vector, string or bitstr." doc-for-bitstr
+"val -- bitstr" stack-comment
+"\\ pack string
+\"Hello\" >bitstr
+\\ pack multiple values
+[ 255 |FF CC| [ \"abc\" 0 ] ] >bitstr" doc-example
+} ">bitstr" doc!
+
+{ "Set big endian." doc-for-bitstr
+    "map -- map" stack-comment
+    "i32 be" doc-example
+} "be" doc!
+
+{ "Set little endian." doc-for-bitstr
+    "map -- map" stack-comment
+    "i32 le" doc-example
+} "le" doc!
+
+{ "Find the first occurence or nil starting from the current offset." doc-for-bitstr
+    "bytestr -- int" stack-comment
+} "find" doc!
+
+{ "Print dump from the current offset." doc-for-bitstr
+} "dump" doc!
+
+{ "Print dump at the given offset." doc-for-bitstr
+    "int --" stack-comment
+} "dump-at" doc!
+
+{ "Set number of bits." doc-for-bitstr
+    "int -- map" stack-comment
+    "11 bits" doc-example
+} "bits" doc!
+
+{ "Set number of bytes." doc-for-bitstr
+    "int -- map" stack-comment
+    "11 bytes" doc-example
+} "bytes" doc!
+
+{ "Null-terminated bytestr, including 0x00 byte." doc-for-bitstr
+    "-- map" stack-comment
+} "nulbytestr" doc!
+
+{ "Null-terminated ascii string, also known as C string." doc-for-bitstr
+    "-- map" stack-comment
+} "cstr" doc!
+
+{ "Null-terminated utf8 string." doc-for-bitstr
+    "-- map" stack-comment
+} "utf8str" doc!
+
+{ "Variable length signed integer." doc-for-bitstr
+    "int -- map" stack-comment
+} "int" doc!
+
+{ "Variable length unsigned integer." doc-for-bitstr
+    "int -- map" stack-comment
+} "uint" doc!
+
+{ "Variable length float, 32 or 64." doc-for-bitstr
+    "int -- map" stack-comment
+} "float" doc!
+
+65 0 do
+    { [ I " bits signed integer" ] concat doc-for-bitstr } [ "i" I ] concat
+    { [ I " bits unsigned integer" ] concat doc-for-bitstr } [ "u" I ] concat
+loop
+
+{ "32 bits float" doc-for-bitstr } "f32" doc!
+
+{ "64 bits float" doc-for-bitstr } "f64" doc!
+
+{ "Read bitstr of exact prefix or raise error." doc-for-bitstr
+    "bitstr -- bitstr" stack-comment
+"\\ test PNG file header
+|89 50 4e 47 0d 0a 1a 0a| magic" doc-example
+} "magic" doc!
+
+{ "Write bitstr to output buffer." doc-for-bitstr
+    "bitstr --" stack-comment
+    "|31323500| emit" doc-example
+} "emit" doc!
+
+{ "Bitstr output buffer." "-- bitstr" stack-comment doc-for-bitstr } "output" doc!
+
+{ "Read template from the current input." doc-for-bitstr
+    "map -- bitstr" stack-comment
+    "i32 read" doc-example
+} "read" doc!
+
+{ "Pin note for the editor." doc-for-bitstr
+    "val --" stack-comment
+    "i32 read pin" doc-example
+} "pin" doc!
+
+{ "Formatting option, set the number base to 16." doc-for-fmt
+    "13 ^hex println" doc-example
+} "^hex" doc!
+
+{ "Formatting option, set the number base to 2." doc-for-fmt
+    "5 ^bin println" doc-example
+} "^bin" doc!
+
+{ "Formatting option, set the number base to 10." doc-for-fmt
+    "13 ^dec println" doc-example
+} "^dec" doc!
+
+{ "Formatting option, set the number base to 8." doc-for-fmt
+    "13 ^oct println" doc-example
+} "^oct" doc!
+
+{ "Formatting option, display the number prefix." doc-for-fmt
+    "bool --" stack-comment
+} "fmt/prefix" doc!
+
+{ "Formatting option, display the tag sticked to the value." doc-for-fmt
+    "bool --" stack-comment
+ } "fmt/tags" doc!
+
+{ "Formatting option, display in upper case." doc-for-fmt
+    "bool --" stack-comment
+} "fmt/upcase" doc!
+
+{ "Decompile the definition." doc-for-core
+ "<name> --" stack-comment
+} "see" doc!
+
+{ "Length of the vector, string or number of bits in bitstr." doc-for-core
+"vec -- int" stack-comment
+"[ 1 2 3 ] length
+\"hello\" length
+|fff| length" doc-example
+} "length" doc!
+
+{ "Get vector item at index.
+Negative index access items from the tail of the vector." doc-for-core
+ "vec int -- val" stack-comment
+"[ 5 7 ] 0 nth
+\\ get last item of the vec
+[ 5 7 ] -1 nth" doc-example
+} "nth" doc!
+
+{ "Concatenate vector of values into a string." doc-for-core
+ "vec -- str" stack-comment
+"[ \"a\" 2 2 + \"b\" ] concat
+\\ result \"a3b\"" doc-example
+} "concat" doc!
+
+{ "Join vector into string using separator." doc-for-core
+"vec str - str" stack-comment
+"[ 1 2 ] \"+\" join
+\\ result \"1+2\" " doc-example
+} "join" doc!
+
+{ "Collect top N stack items into the vector." doc-for-core
+"int -- vec" stack-comment
+"\"a\" \"b\" 2 collect
+\\ result [ \"a\" \"b\" ]" doc-example
+} "collect" doc!
+
+{ "Unbox vector items into the stack." doc-for-core
+ "vec -- val ..." stack-comment
+"[ 1 2 3 ] unbox
+\\ result 3 2 1" doc-example
+} "unbox" doc!
+
+{ "Append item to the back of a vector." doc-for-core
+"val vec -- vec" stack-comment
+"1 [ 3 ] push
+\\ result [ 3 1 ]" doc-example
+} "push" doc!
+
+{ "Include source file at build time." doc-for-core
+    "include \"src/test-hello.xeh\"" doc-example
+} "include" doc!
+
+{ "Include source file at build time only if it's not included already." doc-for-core
+    "require \"foo-library.xeh\"" doc-example
+} "require" doc!
+
+{ "Test that dictionary contains word." doc-for-core
+"defined DEBUG if
+    require \"debug-library.xeh\"
+else
+    require \"release-library.xeh\"
+endif" doc-example
+} "defined" doc!
+
+{ "Create a new file or truncate existing, then write bitstr with padding." doc-for-bitstr
+    "str bitstr --" stack-comment
+    "\"test.bin\" |ff0a| write-all" doc-example
+} "write-all" doc!
+
+{ "Read all bytes from the file." doc-for-bitstr
+    "str -- bitstr" stack-comment
+    "\"test-file.txt\" read-all" doc-example
+} "read-all" doc!
+
+{ "Define global variable with initial value." doc-for-core
+    "1 var ONE" doc-example
+} "var" doc!
+
+{ "Define constant value, require meta-eval context." doc-for-core
+    "#( 0 const ZERO #)" doc-example
+} "const" doc!
+
+{ "Define local variable with initial value." doc-for-core
+": f
+    local a # take value from top of the stack
+    1 local b # assign the new value
+    a b + ;
+3 f println" doc-example
+} "local" doc!
+
+{ "Bind global or local variable with destructuring.
+Raise error if structure didn't match with user definition." doc-for-core
+    "1 let a
+    [ 1 2 ] let [ c d ]"  doc-example
+} "let" doc!
+
+{ "Duplicate top of the stack." doc-for-core
+    "x -- x x" stack-comment
+    "1 dup" doc-example
+} "dup" doc!
+
+{ "Drop top of the stack." doc-for-core
+    "x --" stack-comment
+} "drop" doc!
+
+{ "Exchange top stack item with the second one." doc-for-core
+    "x1 x2 -- x2 x1" stack-comment
+    "1 5 swap" doc-example
+} "swap" doc!
+
+{ "Exchange top stack item with the third one." doc-for-core
+    "x1 x2 x3 -- x3 x2 x1" stack-comment
+} "rot" doc!
+
+{ "Duplicate second top item." doc-for-core
+    "x1 x2 -- x1 x2 x1" stack-comment
+} "over" doc!
+
+{ "Define a word by name without defining its behaviour.
+Deffer word resolution to runtime." doc-for-core
+ "<name>" stack-comment
+"# deffered definition
+late B
+: A B ;
+# actual definition
+: B 1 ;
+A println" doc-example
+} "late" doc!
+
+{ "Convert string to number using default base." doc-for-core
+ "str -- num" stack-comment
+    "\"ff\" ^hex str>number" doc-example
+} "str>number" doc!
+
+{ "Slice string or vector, from the 'start' till the 'end'." doc-for-core
+"str start end -- str" stack-comment
+"\"abc\" 0 1 slice \\ result \"a\"
+\"abc\" -1 str-slice \\ result \"ab\"
+\"abc\" 3 . 2 str-slice \\ result \"c\"" doc-example
+} "slice" doc!
+
+{ "Bit-shift left." doc-for-bitwise
+    "int nbits -- int" stack-comment
+} "lshift" doc!
+
+{ "Bit-shift right." doc-for-bitwise
+    "int nbits -- int" stack-comment
+} "rshift" doc!
+
+{ "Bitwise AND." doc-for-bitwise
+    "int int -- int" stack-comment
+} "and" doc!
+
+{ "Bitwise OR." doc-for-bitwise
+    "int int -- int" stack-comment
+} "or" doc!
+
+{ "Bitwise XOR." doc-for-bitwise
+    "int int -- int" stack-comment
+} "xor" doc!
+
+{ "Bitwise NOT, invert bits." doc-for-bitwise
+    "int -- int" stack-comment
+} "invert" doc!
+
+{ "Logical not." doc-for-core
+    "bool -- bool" stack-comment
+} "not" doc!
+
+{ "Addition" doc-for-arith "num num -- num" stack-comment } "+" doc!
+{ "Substraction" doc-for-arith "num num -- num" stack-comment } "-" doc!
+{ "Multiplication" doc-for-arith "num num -- num" stack-comment } "*" doc!
+{ "Division quotient" doc-for-arith "num num -- num" stack-comment } "/" doc!
+{ "Division reminder" doc-for-arith "num num -- num" stack-comment } "reminder" doc!
+{ "Negate value" doc-for-arith "num -- num" stack-comment } "negate" doc!
+{ "Absolute value" doc-for-arith "num -- num" stack-comment } "abs" doc!
+
+{ "Less than" doc-for-arith "num num -- bool" stack-comment } "<" doc!
+{ "Less or equal" doc-for-arith "num num -- bool" stack-comment } "<=" doc!
+{ "Greater than" doc-for-arith "num num -- bool" stack-comment } ">" doc!
+{ "Greater or equal" doc-for-arith "num num -- bool" stack-comment } ">=" doc!
+{ "Equals" doc-for-arith "num num -- bool" stack-comment } "=" doc!
+{ "Not equals" doc-for-arith "num num -- bool" stack-comment } "<>" doc!
+
+{ "Min value" doc-for-arith "num num -- num" stack-comment } "min" doc!
+{ "Max value" doc-for-arith "num num -- num" stack-comment } "max" doc!
+{ "Round to nearest" doc-for-arith "real -- real" stack-comment } "round" doc!
+{ "Truncate" doc-for-arith "real -- real" stack-comment } "truncate" doc!
+{ "Floor" doc-for-arith "num -- num" stack-comment } "floor" doc!
+{ "Ceiling" doc-for-arith "num -- num" stack-comment } "ceiling" doc!
+{ "Cast to integer" doc-for-arith "num -- int" stack-comment } "integer" doc!
+
+{ "Is zero" doc-for-arith "num -- bool" stack-comment } "integer" doc!
+{ "Is positive number" doc-for-arith "num -- bool" stack-comment } "positive?" doc!
+{ "Is negative number" doc-for-arith "num -- bool" stack-comment } "negative?" doc!
+
+{ "Random between 0.0 and 1.0" doc-for-arith "num num -- bool" stack-comment } "random" doc!
+{ "Generate random bitstring of specified length" doc-for-bitstr "int -- bitstr" stack-comment } "random-bits" doc!
+
+{ "Vector builder" doc-for-core "[ 1 2 3 ]" doc-example } dup "[" doc! swap "]" doc!
+{ "Map builder" doc-for-core "{ 1 \"key-a\" 2 \"key-b\" }" doc-example } dup "{" doc! swap "}" doc!
+
+{ "Begin word definition" doc-for-core ": myword 1 ;" doc-example  } ":" doc!
+{ "End word definition" doc-for-core ": myword 1 ;" doc-example  } ";" doc!
+
+{ "Immediate attribute. Execute word during the compile-time." doc-for-core
+    ": emit-expr immediate 1 1 + ;" doc-example  }
+ "immediate" doc!
+
+{ "Update variable" doc-for-core "val --" stack-comment "0 -> Coutner" doc-example  } "->" doc!
+
+{ "Define enumeration" doc-for-core
+  "enum Name\n A\n B :: 1\nendenum" doc-example }
+  dup "enum" doc! swap "endenum" doc!
+
+{ "Insert map element" doc-for-core "map val key -- map" stack-comment } "insert" doc!
+{ "Remove map element" doc-for-core "map key -- map" stack-comment } "remove" doc!
+{ "Lookup map element" doc-for-core "map key -- map" stack-comment } "get" doc!
+
+{ "Is nil" doc-for-core "-- bool" stack-comment } "nil?" doc!
+{ "Is 0" doc-for-core "-- bool" stack-comment } "zero?" doc!
+{ "Is boolean" doc-for-core "-- bool" stack-comment } "bool?" doc!
+{ "Is integer" doc-for-core "-- bool" stack-comment } "int?" doc!
+{ "Is real" doc-for-core "-- bool" stack-comment } "real?" doc!
+{ "Is string" doc-for-core "-- bool" stack-comment } "str?" doc!
+{ "Is bitstring" doc-for-core "-- bool" stack-comment } "bitstr?" doc!
+{ "Is vector" doc-for-core "-- bool" stack-comment } "vec?" doc!
+{ "Is map" doc-for-core "-- bool" stack-comment } "map?" doc!
+{ "Is two values equals" doc-for-core "-- bool" stack-comment } "equal?" doc!
+
+{ "Sort vector" doc-for-core "vec -- vec" stack-comment  } "sort" doc!
+{ "Reverse vector" doc-for-core "vec -- vec" stack-comment  } "reverse" doc!
+{ "Find vector elemet position" doc-for-core "vec key -- int" stack-comment } "position" doc!
+
+{ "Assert true, check that top element is true" doc-for-core "val --" stack-comment  } "assert" doc!
+{ "Assert equlas, check top two elements are equal" doc-for-core "val --" stack-comment  } "assert-eq" doc!
+{ "Raise error" doc-for-core "val --" stack-comment  } "error" doc!
+
+{ "Print current data stack length" doc-for-core "-- int" stack-comment  } "depth" doc!
+{ "Exit with integer status code" doc-for-core "-- int" stack-comment  } "exit" doc!
+
+{ "Print top stack item" doc-for-core "val --" stack-comment  } "print" doc!
+{ "Print top stack item with newline" doc-for-core "val --" stack-comment  } "println" doc!
+
+{ "Print only the newline character" doc-for-core  } "newline" doc!
+{ "Read next word as string (immediate)" doc-for-core "<name> -- str" stack-comment  } "<name>" doc!
+
+{ "Open the meta-evaluation context" doc-for-core } "#(" doc!
+{ "Close the meta-evaluation context" doc-for-core } "#)" doc!
+
+{ "Resize canvas." doc-for-d2
+    "width height --" stack-comment
+} "d2-resize" doc!
+
+{ "Set RGBA color lookup table." doc-for-d2
+    "vec --" stack-comment
+    "[ 0x112233ff 0x445566ff ] d2-palette!" doc-example
+} "d2-palette!" doc!
+
+{ "Set default RGBA color or lookup index when d2-palette! is set." doc-for-d2
+    "rgba --" stack-comment
+} "d2-color!" doc!
+
+{ "Draw pixel at position with default color." doc-for-d2
+    "x y --" stack-comment
+} "d2-data!" doc!
+
+{ "Encode BASE32 string." doc-for-bitstr
+    "bytestr -- str" stack-comment
+} "base32" doc!
+
+{ "Decode BASE32 string, returns nil on error." doc-for-bitstr
+    "str -- bytestr" stack-comment
+} "base32>" doc!
+
+{ "Encode Crockford's Base32 string." doc-for-bitstr
+    "bytestr -- str" stack-comment
+} "base32hex" doc!
+
+{ "Decode Crockford's Base32 string, returns nil on error." doc-for-bitstr
+    "str -- bytestr" stack-comment
+} "base32hex>" doc!
+
+{ "Encode BASE64 string." doc-for-bitstr
+    "bytestr -- str" stack-comment
+} "base64" doc!
+
+{ "Decode BASE64 string, returns nil on error." doc-for-bitstr
+    "str -- bytestr" stack-comment
+} "base64>" doc!
+
+{ "Encode Zero85 string." doc-for-bitstr
+    "bytestr -- str" stack-comment
+} "zero85" doc!
+
+{ "Decode Zero85 string, returns nil on error." doc-for-bitstr
+    "str -- bytestr" stack-comment
+} "zero85>" doc!
+
+}
+
+#)
