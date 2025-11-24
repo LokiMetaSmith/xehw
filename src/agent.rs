@@ -229,7 +229,7 @@ impl AgentSystem {
         }
     }
 
-    fn spawn_llm_request(&self, agent_id: Uuid, config: AgentConfig, task: &str, code: &str) {
+    pub fn spawn_llm_request(&self, agent_id: Uuid, config: AgentConfig, task: &str, code: &str) {
         let prompt = format!("Task: {}\nCode:\n{}", task, code);
 
         let body_json = serde_json::json!({

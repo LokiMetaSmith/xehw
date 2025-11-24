@@ -1442,11 +1442,31 @@ impl TemplateApp {
         self.xs.reverse_log.as_ref().map(|rlog| rlog.len())
     }
 
-    fn ui_mini_status(&self, ui: &mut Ui, show_trial_error: bool) {
+    fn ui_mini_status(&mut self, ui: &mut Ui, show_trial_error: bool) {
         if let Some(err) = self.xs.last_error() {
             if show_trial_error {
                 let s = format!("ERROR: {}", err);
-                ui.colored_label(self.theme.error, s);
+                ui.horizontal(|ui| {
+                    ui.colored_label(self.theme.error, s);
+                    if ui.button("🔧 Fix with Agent").clicked() {
+                        // Find a suitable agent (first generalist or just first)
+                        if let Some(agent) = self.agent_system.agents.values().find(|a| matches!(a.config.role, AgentRole::Generalist) || true) {
+                             let agent_id = agent.id;
+                             let config = agent.config.clone();
+
+                             let error_msg = format!("{}", err);
+                             let task_desc = format!("Fix error: {}", error_msg);
+
+                             self.agent_system.spawn_llm_request(
+                                 agent_id,
+                                 config,
+                                 &task_desc,
+                                 &self.live_code
+                             );
+                             self.agent_system.log(format!("Requested fix for error: {}", error_msg));
+                        }
+                    }
+                });
             }
         } else {
             let mut s = String::new();
