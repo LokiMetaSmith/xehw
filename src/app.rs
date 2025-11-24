@@ -71,6 +71,8 @@ pub struct TemplateApp {
     agents_open: bool,
     todo_open: bool,
     agent_paste_buffer: String,
+    new_agent_model: String,
+    new_agent_url: String,
     new_task_buffer: String,
     // Collaboration
     collab_system: CollabSystem,
@@ -140,6 +142,8 @@ impl Default for TemplateApp {
             agents_open: false,
             todo_open: false,
             agent_paste_buffer: String::new(),
+            new_agent_model: "llama3".to_string(),
+            new_agent_url: "http://localhost:11434".to_string(),
             new_task_buffer: String::new(),
             collab_system: CollabSystem::default(),
             collab_url: "ws://localhost:8080".to_string(),
@@ -405,6 +409,14 @@ impl TemplateApp {
                 self.agent_system.ui_agents(ui);
                 ui.separator();
                 ui.heading("Configuration");
+                ui.horizontal(|ui| {
+                     ui.label("Model:");
+                     ui.text_edit_singleline(&mut self.new_agent_model);
+                });
+                ui.horizontal(|ui| {
+                     ui.label("Base URL:");
+                     ui.text_edit_singleline(&mut self.new_agent_url);
+                });
                 ui.label("Paste config (Name:Key) one per line:");
                 ui.add(egui::TextEdit::multiline(&mut self.agent_paste_buffer).desired_rows(3));
                 if ui.button("Add Agents").clicked() {
@@ -415,12 +427,16 @@ impl TemplateApp {
                                 name: parts[0].trim().to_string(),
                                 role: AgentRole::Generalist,
                                 api_key: parts[1].trim().to_string(),
-                                base_url: "http://localhost:11434".to_string(),
-                                model: "llama3".to_string(),
+                                base_url: self.new_agent_url.clone(),
+                                model: self.new_agent_model.clone(),
                             });
                         }
                     }
                     self.agent_paste_buffer.clear();
+                }
+                if ui.button("Clear Agents").clicked() {
+                    self.agent_system.agents.clear();
+                    self.agent_system.local_ids.clear();
                 }
                 ui.separator();
                 ui.heading("Logs");
