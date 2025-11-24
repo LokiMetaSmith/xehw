@@ -189,6 +189,11 @@ impl TemplateApp {
                 app.live_code = ws.code.clone();
                 app.agent_system.tasks = ws.tasks.clone();
             }
+            // Load agents
+            if let Some(agents) = eframe::get_value::<HashMap<Uuid, crate::agent::Agent>>(storage, "agents") {
+                app.agent_system.agents = agents;
+                app.agent_system.local_ids = app.agent_system.agents.keys().cloned().collect();
+            }
         }
         app.load_help();
         // Pre-populate some tasks/agents for demo
@@ -378,7 +383,7 @@ impl TemplateApp {
         }
 
         // Poll Agent System
-        self.agent_system.poll(ctx.input(|i| i.time), &self.live_code);
+        self.agent_system.poll(ctx.input(|i| i.time), &self.live_code, &self.current_workspace);
 
         // Poll Collab System
         let mut code_changed_remotely = false;
@@ -504,7 +509,7 @@ impl TemplateApp {
             .default_pos(pos2(win_rect.right() - 400.0, 100.0))
             .vscroll(true)
             .show(ctx, |ui| {
-                self.agent_system.ui_agents(ui);
+                self.agent_system.ui_agents(ui, &self.current_workspace);
                 ui.separator();
                 ui.heading("Configuration");
                 ui.horizontal(|ui| {
@@ -578,7 +583,7 @@ impl TemplateApp {
 
                      if let Some((agent_id, config)) = agent_info {
                          let ctx_docs = self.get_relevant_docs(&self.planning_goal);
-                         self.agent_system.spawn_planning_request(agent_id, config, &self.planning_goal, &self.live_code, &ctx_docs);
+                         self.agent_system.spawn_planning_request(agent_id, config, &self.planning_goal, &self.live_code, &ctx_docs, &self.current_workspace);
                          self.agent_system.log(format!("Planning started for: {}", self.planning_goal));
                      }
                 }
@@ -1514,7 +1519,8 @@ impl TemplateApp {
                              config,
                              &task_desc,
                              &self.live_code,
-                             &ctx_docs
+                             &ctx_docs,
+                             &self.current_workspace
                          );
                          self.agent_system.log(format!("Requested fix for error: {}", error_msg));
                     }
@@ -1701,6 +1707,7 @@ impl eframe::App for TemplateApp {
 
         eframe::set_value(storage, "workspaces", &self.workspaces);
         eframe::set_value(storage, "current_workspace", &self.current_workspace);
+        eframe::set_value(storage, "agents", &self.agent_system.agents);
     }
 
     /// Called each time the UI needs repainting, which may be many times per second.

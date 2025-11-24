@@ -67,10 +67,10 @@ pub struct Task {
 }
 
 pub enum AgentEvent {
-    LlmResponse(Uuid, String), // AgentID, ResponseBody
-    ChatResponse(Uuid, String), // AgentID, ResponseBody
-    PlanResponse(Uuid, String), // AgentID, ResponseBody (List of tasks)
-    LlmError(Uuid, String),
+    LlmResponse(Uuid, String, String), // AgentID, ResponseBody, WorkspaceName
+    ChatResponse(Uuid, String, String), // AgentID, ResponseBody, WorkspaceName
+    PlanResponse(Uuid, String, String), // AgentID, ResponseBody, WorkspaceName
+    LlmError(Uuid, String, String), // AgentID, Error, WorkspaceName
 }
 
 pub struct AgentSystem {
@@ -135,7 +135,7 @@ impl AgentSystem {
         }
     }
 
-    pub fn poll(&mut self, time: f64, current_code: &str) {
+    pub fn poll(&mut self, time: f64, current_code: &str, current_workspace: &str) {
         // 1. Process Events from Async Callbacks
         let mut events = Vec::new();
         if let Ok(mut queue) = self.event_queue.lock() {
@@ -146,7 +146,8 @@ impl AgentSystem {
 
         for event in events {
             match event {
-                AgentEvent::LlmResponse(aid, body) => {
+                AgentEvent::LlmResponse(aid, body, ws_name) => {
+                    if ws_name != current_workspace { continue; }
                     if let Some(agent) = self.agents.get_mut(&aid) {
                         // Mock parsing of response. Assuming raw text for now or simple JSON field "response"
                         let code_snippet = if let Ok(v) = serde_json::from_str::<serde_json::Value>(&body) {
@@ -169,7 +170,8 @@ impl AgentSystem {
                         self.pending_changes.push_back((aid, code_snippet));
                     }
                 }
-                AgentEvent::ChatResponse(aid, body) => {
+                AgentEvent::ChatResponse(aid, body, ws_name) => {
+                    if ws_name != current_workspace { continue; }
                     if let Some(agent) = self.agents.get_mut(&aid) {
                         let response_text = if let Ok(v) = serde_json::from_str::<serde_json::Value>(&body) {
                              v["response"].as_str().unwrap_or(&body).to_string()
@@ -183,7 +185,8 @@ impl AgentSystem {
                         agent.status = AgentStatus::Idle;
                     }
                 }
-                AgentEvent::PlanResponse(aid, body) => {
+                AgentEvent::PlanResponse(aid, body, ws_name) => {
+                    if ws_name != current_workspace { continue; }
                     if let Some(agent) = self.agents.get_mut(&aid) {
                         let response_text = if let Ok(v) = serde_json::from_str::<serde_json::Value>(&body) {
                              v["response"].as_str().unwrap_or(&body).to_string()
@@ -224,7 +227,8 @@ impl AgentSystem {
                         agent.status = AgentStatus::Idle;
                     }
                 }
-                AgentEvent::LlmError(aid, err) => {
+                AgentEvent::LlmError(aid, err, ws_name) => {
+                    if ws_name != current_workspace { continue; }
                     if let Some(agent) = self.agents.get_mut(&aid) {
                         agent.status = AgentStatus::Error(err.clone());
                         self.message_log.push_back(format!("Agent {} error: {}", agent.config.name, err));
@@ -276,11 +280,11 @@ impl AgentSystem {
 
         // 3. Spawn Requests (Immutable Borrow)
         for (agent_id, config, desc, ctx) in requests_to_spawn {
-            self.spawn_llm_request(agent_id, config, &desc, current_code, &ctx);
+            self.spawn_llm_request(agent_id, config, &desc, current_code, &ctx, current_workspace);
         }
     }
 
-    pub fn spawn_llm_request(&self, agent_id: Uuid, config: AgentConfig, task: &str, code: &str, context: &str) {
+    pub fn spawn_llm_request(&self, agent_id: Uuid, config: AgentConfig, task: &str, code: &str, context: &str, workspace_name: &str) {
         let mut full_prompt = String::new();
         if !context.is_empty() {
             full_prompt.push_str("Documentation Context:\n");
@@ -301,6 +305,7 @@ impl AgentSystem {
         request.headers.insert("Content-Type".to_string(), "application/json".to_string());
 
         let queue_clone = self.event_queue.clone();
+        let ws_name = workspace_name.to_string();
 
         ehttp::fetch(request, move |result: ehttp::Result<ehttp::Response>| {
             let event = match result {
@@ -308,12 +313,12 @@ impl AgentSystem {
                     if response.status == 200 {
                         // Try parse text
                         let text = response.text().unwrap_or_default();
-                        AgentEvent::LlmResponse(agent_id, text.to_string())
+                        AgentEvent::LlmResponse(agent_id, text.to_string(), ws_name)
                     } else {
-                        AgentEvent::LlmError(agent_id, format!("Status: {}", response.status))
+                        AgentEvent::LlmError(agent_id, format!("Status: {}", response.status), ws_name)
                     }
                 }
-                Err(e) => AgentEvent::LlmError(agent_id, e),
+                Err(e) => AgentEvent::LlmError(agent_id, e, ws_name),
             };
 
             if let Ok(mut q) = queue_clone.lock() {
@@ -322,7 +327,7 @@ impl AgentSystem {
         });
     }
 
-    pub fn spawn_planning_request(&self, agent_id: Uuid, config: AgentConfig, goal: &str, current_code: &str, context: &str) {
+    pub fn spawn_planning_request(&self, agent_id: Uuid, config: AgentConfig, goal: &str, current_code: &str, context: &str, workspace_name: &str) {
         let prompt = format!(
             "You are a technical lead. Your goal is: {}\n\
             Context:\n{}\n\
@@ -346,18 +351,19 @@ impl AgentSystem {
         request.headers.insert("Content-Type".to_string(), "application/json".to_string());
 
         let queue_clone = self.event_queue.clone();
+        let ws_name = workspace_name.to_string();
 
         ehttp::fetch(request, move |result: ehttp::Result<ehttp::Response>| {
             let event = match result {
                 Ok(response) => {
                     if response.status == 200 {
                          let text = response.text().unwrap_or_default();
-                         AgentEvent::PlanResponse(agent_id, text.to_string())
+                         AgentEvent::PlanResponse(agent_id, text.to_string(), ws_name)
                     } else {
-                         AgentEvent::LlmError(agent_id, format!("Status: {}", response.status))
+                         AgentEvent::LlmError(agent_id, format!("Status: {}", response.status), ws_name)
                     }
                 }
-                Err(e) => AgentEvent::LlmError(agent_id, e),
+                Err(e) => AgentEvent::LlmError(agent_id, e, ws_name),
             };
 
             if let Ok(mut q) = queue_clone.lock() {
@@ -366,7 +372,7 @@ impl AgentSystem {
         });
     }
 
-    pub fn spawn_chat_request(&self, agent_id: Uuid, config: AgentConfig, history: Vec<ChatMessage>, context: &str) {
+    pub fn spawn_chat_request(&self, agent_id: Uuid, config: AgentConfig, history: Vec<ChatMessage>, context: &str, workspace_name: &str) {
         // Build a prompt from history
         let mut prompt = String::new();
         if !config.system_prompt.is_empty() {
@@ -392,18 +398,19 @@ impl AgentSystem {
         request.headers.insert("Content-Type".to_string(), "application/json".to_string());
 
         let queue_clone = self.event_queue.clone();
+        let ws_name = workspace_name.to_string();
 
         ehttp::fetch(request, move |result: ehttp::Result<ehttp::Response>| {
             let event = match result {
                 Ok(response) => {
                     if response.status == 200 {
                          let text = response.text().unwrap_or_default();
-                         AgentEvent::ChatResponse(agent_id, text.to_string())
+                         AgentEvent::ChatResponse(agent_id, text.to_string(), ws_name)
                     } else {
-                         AgentEvent::LlmError(agent_id, format!("Status: {}", response.status))
+                         AgentEvent::LlmError(agent_id, format!("Status: {}", response.status), ws_name)
                     }
                 }
-                Err(e) => AgentEvent::LlmError(agent_id, e),
+                Err(e) => AgentEvent::LlmError(agent_id, e, ws_name),
             };
 
             if let Ok(mut q) = queue_clone.lock() {
@@ -415,7 +422,7 @@ impl AgentSystem {
 
 // UI Helpers
 impl AgentSystem {
-    pub fn ui_agents(&mut self, ui: &mut egui::Ui) {
+    pub fn ui_agents(&mut self, ui: &mut egui::Ui, current_workspace: &str) {
         ui.heading("Active Agents");
         let mut agent_chat_req: Option<(Uuid, AgentConfig, Vec<ChatMessage>)> = None;
 
@@ -468,9 +475,8 @@ impl AgentSystem {
         }
 
         if let Some((id, config, history)) = agent_chat_req {
-             // Note: Context injection for chat is simplified here as we lack direct access to app help.
-             // In a full implementation, we'd need to pass the help context into ui_agents.
-             self.spawn_chat_request(id, config, history, "");
+             // Context injection for chat is simplified here (empty string)
+             self.spawn_chat_request(id, config, history, "", current_workspace);
         }
     }
 
