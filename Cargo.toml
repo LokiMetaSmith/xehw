@@ -28,6 +28,7 @@ getrandom = { version = "0.3.4", features = ["wasm_js"] }
 ewebsock = "0.8.0"
 fuzzy-matcher = "0.3.7"
 similar = "2.7.0"
+syntect = "5.3.0"
 
 [features]
 default = ["persistence"]

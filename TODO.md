@@ -1,9 +1,9 @@
 # TODO & Feature Roadmap
 
 ## Remaining Tasks (Current Architecture)
-- [ ] **Agent Task Sync**: Ensure agent tasks are fully isolated or correctly migrated when switching workspaces (currently pending reviews are cleared, but active tasks might need better handling).
+- [x] **Agent Task Sync**: Ensure agent tasks are fully isolated or correctly migrated when switching workspaces (currently pending reviews are cleared, but active tasks might need better handling).
 - [ ] **Error Handling**: Improve error reporting for network failures (LLM API down, Collaboration server unreachable).
-- [ ] **Persistence**: Verify that all agent configurations (including system prompts) are persisted correctly across restarts.
+- [x] **Persistence**: Verify that all agent configurations (including system prompts) are persisted correctly across restarts.
 
 ## Proposed Features (Enhancements)
 
