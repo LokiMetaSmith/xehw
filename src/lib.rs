@@ -9,6 +9,7 @@ mod canvas;
 mod hotkeys;
 mod layouter;
 mod style;
+mod palette;
 pub use app::TemplateApp;
 
 /*

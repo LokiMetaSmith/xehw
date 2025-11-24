@@ -3,6 +3,7 @@ use egui::*;
 use crate::agent::{AgentConfig, AgentRole, AgentSystem};
 use crate::collab::{CollabSystem, CollabMessage};
 use crate::hotkeys;
+use crate::palette::{Palette, CommandAction};
 use crate::style::Theme;
 use uuid::Uuid;
 use crate::{canvas::*, layouter};
@@ -77,6 +78,7 @@ pub struct TemplateApp {
     collab_open: bool,
     last_agent_sync: f64,
     my_uuid: Uuid,
+    palette: Palette,
 }
 
 #[derive(Clone)]
@@ -144,6 +146,7 @@ impl Default for TemplateApp {
             collab_open: false,
             last_agent_sync: 0.0,
             my_uuid: Uuid::new_v4(),
+            palette: Palette::default(),
         }
     }
 }
@@ -290,6 +293,34 @@ impl TemplateApp {
         let mut vars_clicked = false;
         let mut unfreeze_clicked = false;
         let win_rect = ctx.available_rect();
+
+        if let Some(action) = self.palette.show(ctx) {
+             match action {
+                 CommandAction::ToggleTheme => self.theme_editor = !self.theme_editor,
+                 CommandAction::OpenBinary => open_clicked = true,
+                 CommandAction::ToggleCanvas => canvas_clicked = true,
+                 CommandAction::ToggleBytecode => self.bytecode_open = !self.bytecode_open,
+                 CommandAction::ToggleVariables => vars_clicked = true,
+                 CommandAction::ToggleAgents => self.agents_open = !self.agents_open,
+                 CommandAction::ToggleToDo => self.todo_open = !self.todo_open,
+                 CommandAction::Run => run_clicked = true,
+                 CommandAction::Snapshot => snapshot_clicked = true,
+                 CommandAction::Rollback => rollback_clicked = true,
+                 CommandAction::HelpHotkeys => {
+                     help_clicked = true;
+                     self.help.mode = HelpMode::Hotkeys;
+                 },
+                 CommandAction::HelpIndex => {
+                     help_clicked = true;
+                     self.help.mode = HelpMode::Index;
+                 },
+                 CommandAction::HelpQuickRef => {
+                     help_clicked = true;
+                     self.help.mode = HelpMode::QuickRef;
+                 },
+                 CommandAction::ConnectNetwork => self.collab_open = !self.collab_open,
+             }
+        }
 
         // Poll Agent System
         self.agent_system.poll(ctx.input(|i| i.time), &self.live_code);
@@ -1044,7 +1075,11 @@ impl TemplateApp {
                     run_clicked = true;
                 }
             }
-            if !live_has_focus && !self.help.is_open && !self.goto_open {
+            if ui.input(hotkeys::command_palette_pressed) {
+                self.palette.is_open = !self.palette.is_open;
+            }
+
+            if !live_has_focus && !self.help.is_open && !self.goto_open && !self.palette.is_open {
                 let n = hotkeys::scroll_view_pressed(ctx, self.num_cols as isize);
                 if n != 0 {
                     self.move_view(n);

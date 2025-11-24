@@ -57,3 +57,12 @@ pub fn rnext_pressed(i: &InputState) -> bool {
 pub fn run_pressed(i: &InputState) -> bool {
     i.key_pressed(egui::Key::R)
 }
+
+pub fn command_palette_pressed(i: &InputState) -> bool {
+    let modifiers = if cfg!(target_os = "macos") {
+        i.modifiers.command
+    } else {
+        i.modifiers.ctrl
+    };
+    modifiers && i.modifiers.shift && i.key_pressed(egui::Key::P)
+}
