@@ -22,6 +22,11 @@ This project supports networked collaborative coding. To use it:
 4.  Enter the server URL (default: `ws://localhost:8080`) and click **Connect**.
 5.  Edits to the code and agent activities will be synchronized between connected peers.
 
+## Command Palette
+
+Press `Cmd+Shift+P` (macOS) or `Ctrl+Shift+P` (Windows/Linux) to open the Command Palette.
+This allows quick access to various actions like running code, toggling views, and managing agents.
+
 Screenshots:
 
 ![xehimg.png](imgs/xehimg.png)
