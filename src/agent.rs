@@ -476,6 +476,15 @@ impl AgentSystem {
 
     pub fn ui_tasks(&mut self, ui: &mut egui::Ui) {
         ui.heading("ToDo List");
+
+        let total = self.tasks.len();
+        if total > 0 {
+            let done = self.tasks.iter().filter(|t| t.status == TaskStatus::Done).count();
+            let progress = done as f32 / total as f32;
+            ui.add(egui::ProgressBar::new(progress).text(format!("{}/{} Done", done, total)));
+            ui.separator();
+        }
+
         for (_i, task) in self.tasks.iter().enumerate() {
             ui.horizontal(|ui| {
                 let icon = match task.status {
