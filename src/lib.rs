@@ -10,6 +10,7 @@ mod hotkeys;
 mod layouter;
 mod style;
 mod palette;
+mod workspace;
 pub use app::TemplateApp;
 
 /*

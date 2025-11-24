@@ -5,11 +5,14 @@ use crate::collab::{CollabSystem, CollabMessage};
 use crate::hotkeys;
 use crate::palette::{Palette, CommandAction};
 use crate::style::Theme;
+use crate::workspace::Workspace;
 use uuid::Uuid;
 use crate::{canvas::*, layouter};
 use std::fmt::Write;
 use xeh::prelude::*;
 use xeh::*;
+use std::collections::HashMap;
+use similar::{ChangeTag, TextDiff};
 
 #[cfg(target_arch = "wasm32")]
 type Instant = instant::Instant;
@@ -71,7 +74,11 @@ pub struct TemplateApp {
     agents_open: bool,
     todo_open: bool,
     agent_paste_buffer: String,
+    new_agent_model: String,
+    new_agent_url: String,
+    new_agent_system: String,
     new_task_buffer: String,
+    planning_goal: String,
     // Collaboration
     collab_system: CollabSystem,
     collab_url: String,
@@ -79,6 +86,12 @@ pub struct TemplateApp {
     last_agent_sync: f64,
     my_uuid: Uuid,
     palette: Palette,
+    // Workspaces
+    workspaces: HashMap<String, Workspace>,
+    workspace_open: bool,
+    current_workspace: String,
+    new_workspace_name: String,
+    pending_reviews: std::collections::VecDeque<(Uuid, String)>,
 }
 
 #[derive(Clone)]
@@ -140,13 +153,22 @@ impl Default for TemplateApp {
             agents_open: false,
             todo_open: false,
             agent_paste_buffer: String::new(),
+            new_agent_model: "llama3".to_string(),
+            new_agent_url: "http://localhost:11434".to_string(),
+            new_agent_system: "You are a helpful coding assistant.".to_string(),
             new_task_buffer: String::new(),
+            planning_goal: String::new(),
             collab_system: CollabSystem::default(),
             collab_url: "ws://localhost:8080".to_string(),
             collab_open: false,
             last_agent_sync: 0.0,
             my_uuid: Uuid::new_v4(),
             palette: Palette::default(),
+            workspaces: HashMap::new(),
+            workspace_open: false,
+            current_workspace: "Default".to_string(),
+            new_workspace_name: String::new(),
+            pending_reviews: std::collections::VecDeque::new(),
         }
     }
 }
@@ -161,6 +183,17 @@ impl TemplateApp {
         if let Some(storage) = cc.storage {
             app.theme = eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
             app.interval_word = eframe::get_value(storage, "interval").unwrap_or_default();
+            app.workspaces = eframe::get_value(storage, "workspaces").unwrap_or_default();
+            app.current_workspace = eframe::get_value(storage, "current_workspace").unwrap_or("Default".to_string());
+            if let Some(ws) = app.workspaces.get(&app.current_workspace) {
+                app.live_code = ws.code.clone();
+                app.agent_system.tasks = ws.tasks.clone();
+            }
+            // Load agents
+            if let Some(agents) = eframe::get_value::<HashMap<Uuid, crate::agent::Agent>>(storage, "agents") {
+                app.agent_system.agents = agents;
+                app.agent_system.local_ids = app.agent_system.agents.keys().cloned().collect();
+            }
         }
         app.load_help();
         // Pre-populate some tasks/agents for demo
@@ -190,6 +223,24 @@ impl TemplateApp {
             })
             .collect();
         self.help.words = words;
+    }
+
+    fn get_relevant_docs(&self, query: &str) -> String {
+        let mut context = String::new();
+        let tokens: Vec<&str> = query.split_whitespace().collect();
+        let mut matches = 0;
+        for (word, help) in &self.help.words {
+            if tokens.iter().any(|t| word.as_str().eq_ignore_ascii_case(t)) {
+                if let Some(Ok(text)) = help.get(&HELPTEXT_TAG).map(|x| x.str()) {
+                    context.push_str(&format!("Word: {}\nDescription: {}\n\n", word, text));
+                    matches += 1;
+                }
+                if matches >= 5 {
+                    break;
+                }
+            }
+        }
+        context
     }
 
     fn move_view(&mut self, nrows: isize) {
@@ -319,11 +370,20 @@ impl TemplateApp {
                      self.help.mode = HelpMode::QuickRef;
                  },
                  CommandAction::ConnectNetwork => self.collab_open = !self.collab_open,
+                 CommandAction::ToggleWorkspaces => self.workspace_open = !self.workspace_open,
+                 CommandAction::SaveWorkspace => {
+                    let ws = Workspace {
+                        name: self.current_workspace.clone(),
+                        code: self.live_code.clone(),
+                        tasks: self.agent_system.tasks.clone(),
+                    };
+                    self.workspaces.insert(self.current_workspace.clone(), ws);
+                 },
              }
         }
 
         // Poll Agent System
-        self.agent_system.poll(ctx.input(|i| i.time), &self.live_code);
+        self.agent_system.poll(ctx.input(|i| i.time), &self.live_code, &self.current_workspace);
 
         // Poll Collab System
         let mut code_changed_remotely = false;
@@ -357,18 +417,65 @@ impl TemplateApp {
         }
 
         // Apply pending changes from agents
-        while let Some((aid, code)) = self.agent_system.pending_changes.pop_front() {
-            // 1. Snapshot BEFORE modification for Undo safety
-            if !self.is_trial() {
-                self.snapshot();
-            }
+        while let Some(item) = self.agent_system.pending_changes.pop_front() {
+            self.pending_reviews.push_back(item);
+        }
 
-            if let Some(agent) = self.agent_system.agents.get(&aid) {
-                self.frozen_code.push(FrozenStr::Log(format!("\n# Agent {} wrote code", agent.config.name)));
-            }
-            self.live_code.push_str("\n");
-            self.live_code.push_str(&code);
-            self.frozen_code.push(FrozenStr::Code(Xsubstr::from(&code)));
+        // Code Review UI
+        if let Some((aid, code)) = self.pending_reviews.front().cloned() {
+            let mut open = true;
+            let agent_name = self.agent_system.agents.get(&aid).map(|a| a.config.name.clone()).unwrap_or_else(|| "Unknown Agent".to_string());
+
+            egui::Window::new("Code Review")
+                .open(&mut open)
+                .default_pos(pos2(win_rect.center().x, win_rect.center().y))
+                .show(ctx, |ui| {
+                    ui.heading(format!("Review from {}", agent_name));
+                    ui.separator();
+                    egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
+                        let diff = TextDiff::from_lines(&self.live_code, &code);
+                        for change in diff.iter_all_changes() {
+                            let color = match change.tag() {
+                                ChangeTag::Delete => egui::Color32::from_rgb(100, 0, 0),
+                                ChangeTag::Insert => egui::Color32::from_rgb(0, 100, 0),
+                                ChangeTag::Equal => egui::Color32::TRANSPARENT,
+                            };
+                            ui.horizontal(|ui| {
+                                let sign = match change.tag() {
+                                    ChangeTag::Delete => "-",
+                                    ChangeTag::Insert => "+",
+                                    ChangeTag::Equal => " ",
+                                };
+                                ui.label(RichText::new(format!("{} {}", sign, change.value().trim_end())).background_color(color).monospace());
+                            });
+                        }
+                    });
+                    ui.separator();
+                    ui.horizontal(|ui| {
+                        if ui.button("✅ Approve").clicked() {
+                            // 1. Snapshot BEFORE modification for Undo safety
+                            if !self.is_trial() {
+                                self.snapshot();
+                            }
+
+                            self.frozen_code.push(FrozenStr::Log(format!("\n# Agent {} wrote code", agent_name)));
+                            self.live_code.push_str("\n");
+                            self.live_code.push_str(&code);
+                            self.frozen_code.push(FrozenStr::Code(Xsubstr::from(&code)));
+
+                            self.pending_reviews.pop_front();
+                        }
+                        if ui.button("❌ Reject").clicked() {
+                            self.pending_reviews.pop_front();
+                        }
+                        if ui.button("Skip").clicked() {
+                             // Move to back
+                             if let Some(item) = self.pending_reviews.pop_front() {
+                                 self.pending_reviews.push_back(item);
+                             }
+                        }
+                    });
+                });
         }
 
         self.theme.theme_ui(ctx, &mut self.theme_editor);
@@ -402,9 +509,19 @@ impl TemplateApp {
             .default_pos(pos2(win_rect.right() - 400.0, 100.0))
             .vscroll(true)
             .show(ctx, |ui| {
-                self.agent_system.ui_agents(ui);
+                self.agent_system.ui_agents(ui, &self.current_workspace);
                 ui.separator();
                 ui.heading("Configuration");
+                ui.horizontal(|ui| {
+                     ui.label("Model:");
+                     ui.text_edit_singleline(&mut self.new_agent_model);
+                });
+                ui.horizontal(|ui| {
+                     ui.label("Base URL:");
+                     ui.text_edit_singleline(&mut self.new_agent_url);
+                });
+                ui.label("System Prompt:");
+                ui.add(egui::TextEdit::multiline(&mut self.new_agent_system).desired_rows(2));
                 ui.label("Paste config (Name:Key) one per line:");
                 ui.add(egui::TextEdit::multiline(&mut self.agent_paste_buffer).desired_rows(3));
                 if ui.button("Add Agents").clicked() {
@@ -415,12 +532,17 @@ impl TemplateApp {
                                 name: parts[0].trim().to_string(),
                                 role: AgentRole::Generalist,
                                 api_key: parts[1].trim().to_string(),
-                                base_url: "http://localhost:11434".to_string(),
-                                model: "llama3".to_string(),
+                                base_url: self.new_agent_url.clone(),
+                                model: self.new_agent_model.clone(),
+                                system_prompt: self.new_agent_system.clone(),
                             });
                         }
                     }
                     self.agent_paste_buffer.clear();
+                }
+                if ui.button("Clear Agents").clicked() {
+                    self.agent_system.agents.clear();
+                    self.agent_system.local_ids.clear();
                 }
                 ui.separator();
                 ui.heading("Logs");
@@ -431,22 +553,132 @@ impl TemplateApp {
                 });
             });
 
+        let mut todo_open = self.todo_open;
         egui::Window::new("📝 ToDo List")
-            .open(&mut self.todo_open)
+            .open(&mut todo_open)
             .default_pos(pos2(win_rect.right() - 400.0, 400.0))
             .vscroll(true)
             .show(ctx, |ui| {
                 self.agent_system.ui_tasks(ui);
                 ui.separator();
+                ui.heading("Add Task");
                 ui.horizontal(|ui| {
                     ui.text_edit_singleline(&mut self.new_task_buffer);
-                    if ui.button("Add Task").clicked() {
+                    if ui.button("Add").clicked() {
                         if !self.new_task_buffer.is_empty() {
+                            let ctx_docs = self.get_relevant_docs(&self.new_task_buffer);
                             self.agent_system
-                                .add_task(self.new_task_buffer.clone());
+                                .add_task(self.new_task_buffer.clone(), ctx_docs);
                             self.new_task_buffer.clear();
                         }
                     }
+                });
+                ui.separator();
+                ui.heading("AI Planning");
+                ui.label("Describe a high-level goal:");
+                ui.add(egui::TextEdit::multiline(&mut self.planning_goal).desired_rows(2));
+                if ui.button("🔮 Generate Plan").clicked() && !self.planning_goal.is_empty() {
+                     // Find a suitable agent
+                     let agent_info = self.agent_system.agents.values().find(|a| matches!(a.config.role, AgentRole::Generalist) || true).map(|a| (a.id, a.config.clone()));
+
+                     if let Some((agent_id, config)) = agent_info {
+                         let ctx_docs = self.get_relevant_docs(&self.planning_goal);
+                         self.agent_system.spawn_planning_request(agent_id, config, &self.planning_goal, &self.live_code, &ctx_docs, &self.current_workspace);
+                         self.agent_system.log(format!("Planning started for: {}", self.planning_goal));
+                     }
+                }
+            });
+        self.todo_open = todo_open;
+
+        egui::Window::new("Workspaces")
+            .open(&mut self.workspace_open)
+            .default_pos(pos2(win_rect.center().x, win_rect.center().y))
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Current:");
+                    ui.strong(&self.current_workspace);
+                    if ui.button("📋 Fork").clicked() {
+                         let new_name = format!("{}-copy", self.current_workspace);
+                         if !self.workspaces.contains_key(&new_name) {
+                             // Save current state to the new workspace
+                             let ws = Workspace {
+                                 name: new_name.clone(),
+                                 code: self.live_code.clone(),
+                                 tasks: self.agent_system.tasks.clone(),
+                             };
+                             self.workspaces.insert(new_name.clone(), ws);
+                             // Switch to it
+                             self.current_workspace = new_name;
+                             // No need to reload code/tasks as they are identical
+                         }
+                    }
+                });
+                ui.separator();
+                ui.heading("Switch To:");
+                let mut to_switch = None;
+                let mut to_delete = None;
+                for name in self.workspaces.keys() {
+                    ui.horizontal(|ui| {
+                        if ui.button(name).clicked() {
+                            to_switch = Some(name.clone());
+                        }
+                        if name != "Default" {
+                             if ui.button("🗑").clicked() {
+                                 to_delete = Some(name.clone());
+                             }
+                        }
+                    });
+                }
+                if let Some(name) = to_switch {
+                    // Save current
+                    let ws = Workspace {
+                        name: self.current_workspace.clone(),
+                        code: self.live_code.clone(),
+                        tasks: self.agent_system.tasks.clone(),
+                    };
+                    self.workspaces.insert(self.current_workspace.clone(), ws);
+
+                    // Clear pending reviews and agent state to prevent cross-workspace pollution
+                    self.pending_reviews.clear();
+                    self.agent_system.pending_changes.clear();
+                    for agent in self.agent_system.agents.values_mut() {
+                        agent.status = crate::agent::AgentStatus::Idle;
+                        agent.current_task_id = None;
+                    }
+
+                    // Load new
+                    self.current_workspace = name;
+                    if let Some(ws) = self.workspaces.get(&self.current_workspace) {
+                        self.live_code = ws.code.clone();
+                        self.agent_system.tasks = ws.tasks.clone();
+                    }
+                }
+                if let Some(name) = to_delete {
+                    self.workspaces.remove(&name);
+                }
+
+                ui.separator();
+                ui.horizontal(|ui| {
+                     ui.text_edit_singleline(&mut self.new_workspace_name);
+                     if ui.button("Create New").clicked() && !self.new_workspace_name.is_empty() {
+                         let name = self.new_workspace_name.clone();
+                         if !self.workspaces.contains_key(&name) {
+                             // Save current
+                             let ws = Workspace {
+                                 name: self.current_workspace.clone(),
+                                 code: self.live_code.clone(),
+                                 tasks: self.agent_system.tasks.clone(),
+                             };
+                             self.workspaces.insert(self.current_workspace.clone(), ws);
+
+                             // Create new (empty)
+                             self.current_workspace = name.clone();
+                             self.live_code.clear();
+                             self.agent_system.tasks.clear();
+                             self.workspaces.insert(name, Workspace { name: self.current_workspace.clone(), ..Default::default() });
+                             self.new_workspace_name.clear();
+                         }
+                     }
                 });
             });
 
@@ -1261,11 +1493,38 @@ impl TemplateApp {
         self.xs.reverse_log.as_ref().map(|rlog| rlog.len())
     }
 
-    fn ui_mini_status(&self, ui: &mut Ui, show_trial_error: bool) {
+    fn ui_mini_status(&mut self, ui: &mut Ui, show_trial_error: bool) {
         if let Some(err) = self.xs.last_error() {
             if show_trial_error {
                 let s = format!("ERROR: {}", err);
-                ui.colored_label(self.theme.error, s);
+                let mut request_fix = false;
+                ui.horizontal(|ui| {
+                    ui.colored_label(self.theme.error, &s);
+                    if ui.button("🔧 Fix with Agent").clicked() {
+                        request_fix = true;
+                    }
+                });
+
+                if request_fix {
+                    // Find a suitable agent (first generalist or just first)
+                    let agent_info = self.agent_system.agents.values().find(|a| matches!(a.config.role, AgentRole::Generalist) || true).map(|a| (a.id, a.config.clone()));
+
+                    if let Some((agent_id, config)) = agent_info {
+                         let error_msg = format!("{}", err);
+                         let task_desc = format!("Fix error: {}", error_msg);
+                         let ctx_docs = self.get_relevant_docs(&error_msg); // Might find docs for error words
+
+                         self.agent_system.spawn_llm_request(
+                             agent_id,
+                             config,
+                             &task_desc,
+                             &self.live_code,
+                             &ctx_docs,
+                             &self.current_workspace
+                         );
+                         self.agent_system.log(format!("Requested fix for error: {}", error_msg));
+                    }
+                }
             }
         } else {
             let mut s = String::new();
@@ -1437,6 +1696,18 @@ impl eframe::App for TemplateApp {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, eframe::APP_KEY, &self.theme);
         eframe::set_value(storage, "interval", &self.interval_word);
+
+        // Update current workspace before saving
+        let ws = Workspace {
+            name: self.current_workspace.clone(),
+            code: self.live_code.clone(),
+            tasks: self.agent_system.tasks.clone(),
+        };
+        self.workspaces.insert(self.current_workspace.clone(), ws);
+
+        eframe::set_value(storage, "workspaces", &self.workspaces);
+        eframe::set_value(storage, "current_workspace", &self.current_workspace);
+        eframe::set_value(storage, "agents", &self.agent_system.agents);
     }
 
     /// Called each time the UI needs repainting, which may be many times per second.
