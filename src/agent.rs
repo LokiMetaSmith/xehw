@@ -30,6 +30,12 @@ pub struct AgentConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ChatMessage {
+    pub sender: String,
+    pub content: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Agent {
     pub id: Uuid,
     pub config: AgentConfig,
@@ -37,6 +43,9 @@ pub struct Agent {
     pub current_task_id: Option<Uuid>,
     pub cursor_idx: Option<usize>,
     pub snapshot: Option<String>,
+    // Chat
+    pub chat_history: Vec<ChatMessage>,
+    pub chat_input: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -57,6 +66,7 @@ pub struct Task {
 
 pub enum AgentEvent {
     LlmResponse(Uuid, String), // AgentID, ResponseBody
+    ChatResponse(Uuid, String), // AgentID, ResponseBody
     LlmError(Uuid, String),
 }
 
@@ -96,6 +106,8 @@ impl AgentSystem {
             current_task_id: None,
             cursor_idx: None,
             snapshot: None,
+            chat_history: Vec::new(),
+            chat_input: String::new(),
         });
         self.local_ids.insert(id);
         self.log(format!("Agent added: {}", self.agents.get(&id).unwrap().config.name));
@@ -151,6 +163,20 @@ impl AgentSystem {
 
                         // Queue the code change
                         self.pending_changes.push_back((aid, code_snippet));
+                    }
+                }
+                AgentEvent::ChatResponse(aid, body) => {
+                    if let Some(agent) = self.agents.get_mut(&aid) {
+                        let response_text = if let Ok(v) = serde_json::from_str::<serde_json::Value>(&body) {
+                             v["response"].as_str().unwrap_or(&body).to_string()
+                        } else {
+                             body
+                        };
+                        agent.chat_history.push(ChatMessage {
+                            sender: agent.config.name.clone(),
+                            content: response_text,
+                        });
+                        agent.status = AgentStatus::Idle;
                     }
                 }
                 AgentEvent::LlmError(aid, err) => {
@@ -237,29 +263,106 @@ impl AgentSystem {
             }
         });
     }
+
+    pub fn spawn_chat_request(&self, agent_id: Uuid, config: AgentConfig, history: Vec<ChatMessage>) {
+        // Build a prompt from history
+        // For standard Ollama/Llama, prompt format is just appending text or using template.
+        // Here we just concat for simplicity:
+        let mut prompt = String::new();
+        for msg in history {
+             prompt.push_str(&format!("{}: {}\n", msg.sender, msg.content));
+        }
+
+        let body_json = serde_json::json!({
+            "model": config.model,
+            "prompt": prompt,
+            "stream": false
+        });
+
+        let mut request = ehttp::Request::post(
+            format!("{}/api/generate", config.base_url),
+            serde_json::to_vec(&body_json).unwrap_or_default(),
+        );
+        request.headers.insert("Content-Type".to_string(), "application/json".to_string());
+
+        let queue_clone = self.event_queue.clone();
+
+        ehttp::fetch(request, move |result: ehttp::Result<ehttp::Response>| {
+            let event = match result {
+                Ok(response) => {
+                    if response.status == 200 {
+                         let text = response.text().unwrap_or_default();
+                         AgentEvent::ChatResponse(agent_id, text.to_string())
+                    } else {
+                         AgentEvent::LlmError(agent_id, format!("Status: {}", response.status))
+                    }
+                }
+                Err(e) => AgentEvent::LlmError(agent_id, e),
+            };
+
+            if let Ok(mut q) = queue_clone.lock() {
+                q.push_back(event);
+            }
+        });
+    }
 }
 
 // UI Helpers
 impl AgentSystem {
     pub fn ui_agents(&mut self, ui: &mut egui::Ui) {
         ui.heading("Active Agents");
-        for agent in self.agents.values() {
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(&agent.config.name).strong());
-                let status_text = match &agent.status {
-                    AgentStatus::Idle => egui::RichText::new("Idle").color(Color32::GRAY),
-                    AgentStatus::Thinking(s) => egui::RichText::new(format!("Thinking: {}", s)).color(Color32::YELLOW),
-                    AgentStatus::Typing => egui::RichText::new("Typing...").color(Color32::GREEN),
-                    AgentStatus::Voting => egui::RichText::new("Voting").color(Color32::LIGHT_BLUE),
-                    AgentStatus::Error(e) => egui::RichText::new(format!("Error: {}", e)).color(Color32::RED),
-                };
-                ui.label(status_text);
+        let mut agent_chat_req: Option<(Uuid, AgentConfig, Vec<ChatMessage>)> = None;
+
+        for (id, agent) in self.agents.iter_mut() {
+            ui.group(|ui| {
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(&agent.config.name).strong());
+                    let status_text = match &agent.status {
+                        AgentStatus::Idle => egui::RichText::new("Idle").color(Color32::GRAY),
+                        AgentStatus::Thinking(s) => egui::RichText::new(format!("Thinking: {}", s)).color(Color32::YELLOW),
+                        AgentStatus::Typing => egui::RichText::new("Typing...").color(Color32::GREEN),
+                        AgentStatus::Voting => egui::RichText::new("Voting").color(Color32::LIGHT_BLUE),
+                        AgentStatus::Error(e) => egui::RichText::new(format!("Error: {}", e)).color(Color32::RED),
+                    };
+                    ui.label(status_text);
+                });
                 if let Some(tid) = agent.current_task_id {
                      if let Some(task) = self.tasks.iter().find(|t| t.id == tid) {
                          ui.label(format!("Working on: {}", task.description));
                      }
                 }
+
+                // Chat UI
+                ui.collapsing("Chat", |ui| {
+                     egui::ScrollArea::vertical().id_salt(format!("chat_scroll_{}", id)).max_height(200.0).show(ui, |ui| {
+                         for msg in &agent.chat_history {
+                             ui.horizontal(|ui| {
+                                 ui.strong(format!("{}: ", msg.sender));
+                                 ui.label(&msg.content);
+                             });
+                         }
+                     });
+                     ui.horizontal(|ui| {
+                         ui.text_edit_singleline(&mut agent.chat_input);
+                         if ui.button("Send").clicked() && !agent.chat_input.is_empty() {
+                             let content = agent.chat_input.clone();
+                             agent.chat_input.clear();
+
+                             agent.chat_history.push(ChatMessage {
+                                 sender: "User".to_string(),
+                                 content: content,
+                             });
+
+                             agent.status = AgentStatus::Thinking("Chatting...".to_string());
+                             agent_chat_req = Some((*id, agent.config.clone(), agent.chat_history.clone()));
+                         }
+                     });
+                });
             });
+        }
+
+        if let Some((id, config, history)) = agent_chat_req {
+             self.spawn_chat_request(id, config, history);
         }
     }
 
