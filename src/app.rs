@@ -12,6 +12,7 @@ use std::fmt::Write;
 use xeh::prelude::*;
 use xeh::*;
 use std::collections::HashMap;
+use similar::{ChangeTag, TextDiff};
 
 #[cfg(target_arch = "wasm32")]
 type Instant = instant::Instant;
@@ -407,7 +408,22 @@ impl TemplateApp {
                     ui.heading(format!("Review from {}", agent_name));
                     ui.separator();
                     egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
-                        ui.monospace(&code);
+                        let diff = TextDiff::from_lines(&self.live_code, &code);
+                        for change in diff.iter_all_changes() {
+                            let color = match change.tag() {
+                                ChangeTag::Delete => egui::Color32::from_rgb(100, 0, 0),
+                                ChangeTag::Insert => egui::Color32::from_rgb(0, 100, 0),
+                                ChangeTag::Equal => egui::Color32::TRANSPARENT,
+                            };
+                            ui.horizontal(|ui| {
+                                let sign = match change.tag() {
+                                    ChangeTag::Delete => "-",
+                                    ChangeTag::Insert => "+",
+                                    ChangeTag::Equal => " ",
+                                };
+                                ui.label(RichText::new(format!("{} {}", sign, change.value().trim_end())).background_color(color).monospace());
+                            });
+                        }
                     });
                     ui.separator();
                     ui.horizontal(|ui| {
