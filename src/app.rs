@@ -220,6 +220,24 @@ impl TemplateApp {
         self.help.words = words;
     }
 
+    fn get_relevant_docs(&self, query: &str) -> String {
+        let mut context = String::new();
+        let tokens: Vec<&str> = query.split_whitespace().collect();
+        let mut matches = 0;
+        for (word, help) in &self.help.words {
+            if tokens.iter().any(|t| word.as_str().eq_ignore_ascii_case(t)) {
+                if let Some(Ok(text)) = help.get(&HELPTEXT_TAG).map(|x| x.str()) {
+                    context.push_str(&format!("Word: {}\nDescription: {}\n\n", word, text));
+                    matches += 1;
+                }
+                if matches >= 5 {
+                    break;
+                }
+            }
+        }
+        context
+    }
+
     fn move_view(&mut self, nrows: isize) {
         let n = (self.view_pos as isize + (nrows * self.num_cols as isize * 8)).max(0) as usize;
         self.view_pos = n.min(self.current_bstr().end());
@@ -530,8 +548,9 @@ impl TemplateApp {
                 });
             });
 
+        let mut todo_open = self.todo_open;
         egui::Window::new("📝 ToDo List")
-            .open(&mut self.todo_open)
+            .open(&mut todo_open)
             .default_pos(pos2(win_rect.right() - 400.0, 400.0))
             .vscroll(true)
             .show(ctx, |ui| {
@@ -542,8 +561,9 @@ impl TemplateApp {
                     ui.text_edit_singleline(&mut self.new_task_buffer);
                     if ui.button("Add").clicked() {
                         if !self.new_task_buffer.is_empty() {
+                            let ctx_docs = self.get_relevant_docs(&self.new_task_buffer);
                             self.agent_system
-                                .add_task(self.new_task_buffer.clone());
+                                .add_task(self.new_task_buffer.clone(), ctx_docs);
                             self.new_task_buffer.clear();
                         }
                     }
@@ -554,14 +574,16 @@ impl TemplateApp {
                 ui.add(egui::TextEdit::multiline(&mut self.planning_goal).desired_rows(2));
                 if ui.button("🔮 Generate Plan").clicked() && !self.planning_goal.is_empty() {
                      // Find a suitable agent
-                     if let Some(agent) = self.agent_system.agents.values().find(|a| matches!(a.config.role, AgentRole::Generalist) || true) {
-                         let agent_id = agent.id;
-                         let config = agent.config.clone();
-                         self.agent_system.spawn_planning_request(agent_id, config, &self.planning_goal, &self.live_code);
+                     let agent_info = self.agent_system.agents.values().find(|a| matches!(a.config.role, AgentRole::Generalist) || true).map(|a| (a.id, a.config.clone()));
+
+                     if let Some((agent_id, config)) = agent_info {
+                         let ctx_docs = self.get_relevant_docs(&self.planning_goal);
+                         self.agent_system.spawn_planning_request(agent_id, config, &self.planning_goal, &self.live_code, &ctx_docs);
                          self.agent_system.log(format!("Planning started for: {}", self.planning_goal));
                      }
                 }
             });
+        self.todo_open = todo_open;
 
         egui::Window::new("Workspaces")
             .open(&mut self.workspace_open)
@@ -610,6 +632,14 @@ impl TemplateApp {
                         tasks: self.agent_system.tasks.clone(),
                     };
                     self.workspaces.insert(self.current_workspace.clone(), ws);
+
+                    // Clear pending reviews and agent state to prevent cross-workspace pollution
+                    self.pending_reviews.clear();
+                    self.agent_system.pending_changes.clear();
+                    for agent in self.agent_system.agents.values_mut() {
+                        agent.status = crate::agent::AgentStatus::Idle;
+                        agent.current_task_id = None;
+                    }
 
                     // Load new
                     self.current_workspace = name;
@@ -1462,27 +1492,33 @@ impl TemplateApp {
         if let Some(err) = self.xs.last_error() {
             if show_trial_error {
                 let s = format!("ERROR: {}", err);
+                let mut request_fix = false;
                 ui.horizontal(|ui| {
-                    ui.colored_label(self.theme.error, s);
+                    ui.colored_label(self.theme.error, &s);
                     if ui.button("🔧 Fix with Agent").clicked() {
-                        // Find a suitable agent (first generalist or just first)
-                        if let Some(agent) = self.agent_system.agents.values().find(|a| matches!(a.config.role, AgentRole::Generalist) || true) {
-                             let agent_id = agent.id;
-                             let config = agent.config.clone();
-
-                             let error_msg = format!("{}", err);
-                             let task_desc = format!("Fix error: {}", error_msg);
-
-                             self.agent_system.spawn_llm_request(
-                                 agent_id,
-                                 config,
-                                 &task_desc,
-                                 &self.live_code
-                             );
-                             self.agent_system.log(format!("Requested fix for error: {}", error_msg));
-                        }
+                        request_fix = true;
                     }
                 });
+
+                if request_fix {
+                    // Find a suitable agent (first generalist or just first)
+                    let agent_info = self.agent_system.agents.values().find(|a| matches!(a.config.role, AgentRole::Generalist) || true).map(|a| (a.id, a.config.clone()));
+
+                    if let Some((agent_id, config)) = agent_info {
+                         let error_msg = format!("{}", err);
+                         let task_desc = format!("Fix error: {}", error_msg);
+                         let ctx_docs = self.get_relevant_docs(&error_msg); // Might find docs for error words
+
+                         self.agent_system.spawn_llm_request(
+                             agent_id,
+                             config,
+                             &task_desc,
+                             &self.live_code,
+                             &ctx_docs
+                         );
+                         self.agent_system.log(format!("Requested fix for error: {}", error_msg));
+                    }
+                }
             }
         } else {
             let mut s = String::new();

@@ -63,6 +63,7 @@ pub struct Task {
     pub description: String,
     pub status: TaskStatus,
     pub assignee: Option<Uuid>,
+    pub context: String,
 }
 
 pub enum AgentEvent {
@@ -115,13 +116,14 @@ impl AgentSystem {
         self.log(format!("Agent added: {}", self.agents.get(&id).unwrap().config.name));
     }
 
-    pub fn add_task(&mut self, description: String) {
+    pub fn add_task(&mut self, description: String, context: String) {
         let id = Uuid::new_v4();
         self.tasks.push(Task {
             id,
             description,
             status: TaskStatus::Pending,
             assignee: None,
+            context,
         });
         self.log(format!("Task added: {}", self.tasks.last().unwrap().description));
     }
@@ -214,6 +216,7 @@ impl AgentSystem {
                                 description: desc,
                                 status: TaskStatus::Pending,
                                 assignee: None,
+                                context: String::new(), // Planning tasks don't inherit context by default
                             });
                         }
 
@@ -242,6 +245,8 @@ impl AgentSystem {
             .map(|(id, _)| *id)
             .collect();
 
+        let mut requests_to_spawn = Vec::new();
+
         for agent_id in idle_agents {
             if let Some(task_idx) = self.tasks.iter().position(|t| t.status == TaskStatus::Pending) {
                 let task_id = self.tasks[task_idx].id;
@@ -256,26 +261,37 @@ impl AgentSystem {
                     agent.current_task_id = Some(task_id);
                     agent.snapshot = Some(current_code.to_string());
 
-                    Some((agent.config.clone(), task_desc))
+                    Some((agent.config.clone(), task_desc, self.tasks[task_idx].context.clone()))
                 } else {
                     None
                 };
 
-                // 2. Perform Actions (Immutable/No Borrow)
-                if let Some((config, desc)) = request_data {
+                // 2. Collect Request Data (No Borrow)
+                if let Some((config, desc, ctx)) = request_data {
                     self.log(format!("{} started: {}", config.name, desc));
-                    self.spawn_llm_request(agent_id, config, &desc, current_code);
+                    requests_to_spawn.push((agent_id, config, desc, ctx));
                 }
             }
         }
+
+        // 3. Spawn Requests (Immutable Borrow)
+        for (agent_id, config, desc, ctx) in requests_to_spawn {
+            self.spawn_llm_request(agent_id, config, &desc, current_code, &ctx);
+        }
     }
 
-    pub fn spawn_llm_request(&self, agent_id: Uuid, config: AgentConfig, task: &str, code: &str) {
-        let prompt = format!("Task: {}\nCode:\n{}", task, code);
+    pub fn spawn_llm_request(&self, agent_id: Uuid, config: AgentConfig, task: &str, code: &str, context: &str) {
+        let mut full_prompt = String::new();
+        if !context.is_empty() {
+            full_prompt.push_str("Documentation Context:\n");
+            full_prompt.push_str(context);
+            full_prompt.push_str("\n\n");
+        }
+        full_prompt.push_str(&format!("Task: {}\nCode:\n{}", task, code));
 
         let body_json = serde_json::json!({
             "model": config.model,
-            "prompt": prompt,
+            "prompt": full_prompt,
             "stream": false
         });
         let mut request = ehttp::Request::post(
@@ -306,14 +322,15 @@ impl AgentSystem {
         });
     }
 
-    pub fn spawn_planning_request(&self, agent_id: Uuid, config: AgentConfig, goal: &str, current_code: &str) {
+    pub fn spawn_planning_request(&self, agent_id: Uuid, config: AgentConfig, goal: &str, current_code: &str, context: &str) {
         let prompt = format!(
             "You are a technical lead. Your goal is: {}\n\
+            Context:\n{}\n\
             Current Code:\n{}\n\
             Break this goal down into a list of small, actionable coding tasks.\n\
             Format the output as a bulleted list (start lines with '- ').\n\
             Do not include extra chatter, just the list.",
-            goal, current_code
+            goal, context, current_code
         );
 
         let body_json = serde_json::json!({
@@ -349,13 +366,14 @@ impl AgentSystem {
         });
     }
 
-    pub fn spawn_chat_request(&self, agent_id: Uuid, config: AgentConfig, history: Vec<ChatMessage>) {
+    pub fn spawn_chat_request(&self, agent_id: Uuid, config: AgentConfig, history: Vec<ChatMessage>, context: &str) {
         // Build a prompt from history
-        // For standard Ollama/Llama, prompt format is just appending text or using template.
-        // Here we just concat for simplicity:
         let mut prompt = String::new();
         if !config.system_prompt.is_empty() {
             prompt.push_str(&format!("System: {}\n", config.system_prompt));
+        }
+        if !context.is_empty() {
+            prompt.push_str(&format!("System Context: {}\n", context));
         }
         for msg in history {
              prompt.push_str(&format!("{}: {}\n", msg.sender, msg.content));
@@ -450,7 +468,9 @@ impl AgentSystem {
         }
 
         if let Some((id, config, history)) = agent_chat_req {
-             self.spawn_chat_request(id, config, history);
+             // Note: Context injection for chat is simplified here as we lack direct access to app help.
+             // In a full implementation, we'd need to pass the help context into ui_agents.
+             self.spawn_chat_request(id, config, history, "");
         }
     }
 
