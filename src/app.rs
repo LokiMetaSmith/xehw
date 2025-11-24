@@ -6,6 +6,7 @@ use crate::hotkeys;
 use crate::palette::{Palette, CommandAction};
 use crate::style::Theme;
 use crate::workspace::Workspace;
+use crate::file_explorer::FileExplorer;
 use uuid::Uuid;
 use crate::{canvas::*, layouter};
 use std::fmt::Write;
@@ -92,6 +93,8 @@ pub struct TemplateApp {
     current_workspace: String,
     new_workspace_name: String,
     pending_reviews: std::collections::VecDeque<(Uuid, String)>,
+    #[cfg(not(target_arch = "wasm32"))]
+    file_explorer: FileExplorer,
 }
 
 #[derive(Clone)]
@@ -169,6 +172,8 @@ impl Default for TemplateApp {
             current_workspace: "Default".to_string(),
             new_workspace_name: String::new(),
             pending_reviews: std::collections::VecDeque::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            file_explorer: FileExplorer::default(),
         }
     }
 }
@@ -379,6 +384,10 @@ impl TemplateApp {
                     };
                     self.workspaces.insert(self.current_workspace.clone(), ws);
                  },
+                 #[cfg(not(target_arch = "wasm32"))]
+                 CommandAction::ToggleFileExplorer => {
+                     self.file_explorer.is_open = !self.file_explorer.is_open;
+                 }
              }
         }
 
@@ -1070,7 +1079,26 @@ impl TemplateApp {
             });
         }); // top panel
 
-        egui::SidePanel::left("left_panel")
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.file_explorer.is_open {
+            egui::SidePanel::left("file_explorer")
+                .resizable(true)
+                .default_width(200.0)
+                .show(ctx, |ui| {
+                    if let Some(path) = self.file_explorer.ui(ui) {
+                        if let Ok(content) = std::fs::read_to_string(&path) {
+                            // Snapshot before replace
+                            if !self.is_trial() {
+                                self.snapshot();
+                            }
+                            self.live_code = content;
+                            self.frozen_code.push(FrozenStr::Log(format!("Loaded file: {:?}", path)));
+                        }
+                    }
+                });
+        }
+
+        egui::SidePanel::left("hex_view")
             .resizable(false)
             .show(ctx, |ui| {
                 let ncols = self.num_cols * 4 + 10;

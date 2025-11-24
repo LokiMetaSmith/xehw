@@ -11,6 +11,7 @@ mod layouter;
 mod style;
 mod palette;
 mod workspace;
+mod file_explorer;
 pub use app::TemplateApp;
 
 /*

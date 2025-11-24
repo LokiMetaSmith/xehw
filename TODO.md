@@ -20,7 +20,7 @@
     - Integrated terminal emulator to run shell commands (cargo, git, etc.) without leaving the app.
 
 ### Editor Improvements
-- [ ] **Syntax Highlighting**:
+- [x] **Syntax Highlighting**:
     - Integrate a syntax highlighter (e.g., `syntect` or improved custom lexer) for better code readability.
     - Theme support for syntax colors.
 - [ ] **Multi-File Support**:
