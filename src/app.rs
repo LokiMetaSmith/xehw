@@ -631,6 +631,7 @@ impl TemplateApp {
                                 add(ui, "Focus on Code", "(Esc, E)");
                                 add(ui, "Canvas - Show", "(Esc, M)");
                                 add(ui, "Help - Show", "(Esc, H)");
+                                add(ui, "Command Palette", "(Cmd/Ctrl+Shift+P)");
                                 ui.heading("Mouse");
                                 ui.colored_label(
                                     self.theme.text,
