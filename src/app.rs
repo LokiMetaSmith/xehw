@@ -89,6 +89,7 @@ pub struct TemplateApp {
     workspace_open: bool,
     current_workspace: String,
     new_workspace_name: String,
+    pending_reviews: std::collections::VecDeque<(Uuid, String)>,
 }
 
 #[derive(Clone)]
@@ -164,6 +165,7 @@ impl Default for TemplateApp {
             workspace_open: false,
             current_workspace: "Default".to_string(),
             new_workspace_name: String::new(),
+            pending_reviews: std::collections::VecDeque::new(),
         }
     }
 }
@@ -389,18 +391,50 @@ impl TemplateApp {
         }
 
         // Apply pending changes from agents
-        while let Some((aid, code)) = self.agent_system.pending_changes.pop_front() {
-            // 1. Snapshot BEFORE modification for Undo safety
-            if !self.is_trial() {
-                self.snapshot();
-            }
+        while let Some(item) = self.agent_system.pending_changes.pop_front() {
+            self.pending_reviews.push_back(item);
+        }
 
-            if let Some(agent) = self.agent_system.agents.get(&aid) {
-                self.frozen_code.push(FrozenStr::Log(format!("\n# Agent {} wrote code", agent.config.name)));
-            }
-            self.live_code.push_str("\n");
-            self.live_code.push_str(&code);
-            self.frozen_code.push(FrozenStr::Code(Xsubstr::from(&code)));
+        // Code Review UI
+        if let Some((aid, code)) = self.pending_reviews.front().cloned() {
+            let mut open = true;
+            let agent_name = self.agent_system.agents.get(&aid).map(|a| a.config.name.clone()).unwrap_or_else(|| "Unknown Agent".to_string());
+
+            egui::Window::new("Code Review")
+                .open(&mut open)
+                .default_pos(pos2(win_rect.center().x, win_rect.center().y))
+                .show(ctx, |ui| {
+                    ui.heading(format!("Review from {}", agent_name));
+                    ui.separator();
+                    egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
+                        ui.monospace(&code);
+                    });
+                    ui.separator();
+                    ui.horizontal(|ui| {
+                        if ui.button("✅ Approve").clicked() {
+                            // 1. Snapshot BEFORE modification for Undo safety
+                            if !self.is_trial() {
+                                self.snapshot();
+                            }
+
+                            self.frozen_code.push(FrozenStr::Log(format!("\n# Agent {} wrote code", agent_name)));
+                            self.live_code.push_str("\n");
+                            self.live_code.push_str(&code);
+                            self.frozen_code.push(FrozenStr::Code(Xsubstr::from(&code)));
+
+                            self.pending_reviews.pop_front();
+                        }
+                        if ui.button("❌ Reject").clicked() {
+                            self.pending_reviews.pop_front();
+                        }
+                        if ui.button("Skip").clicked() {
+                             // Move to back
+                             if let Some(item) = self.pending_reviews.pop_front() {
+                                 self.pending_reviews.push_back(item);
+                             }
+                        }
+                    });
+                });
         }
 
         self.theme.theme_ui(ctx, &mut self.theme_editor);
