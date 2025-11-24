@@ -18,6 +18,8 @@ pub enum CommandAction {
     HelpIndex,
     HelpQuickRef,
     ConnectNetwork,
+    ToggleWorkspaces,
+    SaveWorkspace,
 }
 
 #[derive(Clone)]
@@ -54,6 +56,8 @@ impl Default for Palette {
                 Command { name: "Help: Index".into(), action: CommandAction::HelpIndex },
                 Command { name: "Help: Quick Reference".into(), action: CommandAction::HelpQuickRef },
                 Command { name: "Network: Connect...".into(), action: CommandAction::ConnectNetwork },
+                Command { name: "Workspaces: Manage...".into(), action: CommandAction::ToggleWorkspaces },
+                Command { name: "Workspaces: Save".into(), action: CommandAction::SaveWorkspace },
             ],
             selected_index: 0,
             matcher: SkimMatcherV2::default(),

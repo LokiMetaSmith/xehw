@@ -5,11 +5,13 @@ use crate::collab::{CollabSystem, CollabMessage};
 use crate::hotkeys;
 use crate::palette::{Palette, CommandAction};
 use crate::style::Theme;
+use crate::workspace::Workspace;
 use uuid::Uuid;
 use crate::{canvas::*, layouter};
 use std::fmt::Write;
 use xeh::prelude::*;
 use xeh::*;
+use std::collections::HashMap;
 
 #[cfg(target_arch = "wasm32")]
 type Instant = instant::Instant;
@@ -81,6 +83,11 @@ pub struct TemplateApp {
     last_agent_sync: f64,
     my_uuid: Uuid,
     palette: Palette,
+    // Workspaces
+    workspaces: HashMap<String, Workspace>,
+    workspace_open: bool,
+    current_workspace: String,
+    new_workspace_name: String,
 }
 
 #[derive(Clone)]
@@ -151,6 +158,10 @@ impl Default for TemplateApp {
             last_agent_sync: 0.0,
             my_uuid: Uuid::new_v4(),
             palette: Palette::default(),
+            workspaces: HashMap::new(),
+            workspace_open: false,
+            current_workspace: "Default".to_string(),
+            new_workspace_name: String::new(),
         }
     }
 }
@@ -165,6 +176,12 @@ impl TemplateApp {
         if let Some(storage) = cc.storage {
             app.theme = eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
             app.interval_word = eframe::get_value(storage, "interval").unwrap_or_default();
+            app.workspaces = eframe::get_value(storage, "workspaces").unwrap_or_default();
+            app.current_workspace = eframe::get_value(storage, "current_workspace").unwrap_or("Default".to_string());
+            if let Some(ws) = app.workspaces.get(&app.current_workspace) {
+                app.live_code = ws.code.clone();
+                app.agent_system.tasks = ws.tasks.clone();
+            }
         }
         app.load_help();
         // Pre-populate some tasks/agents for demo
@@ -323,6 +340,15 @@ impl TemplateApp {
                      self.help.mode = HelpMode::QuickRef;
                  },
                  CommandAction::ConnectNetwork => self.collab_open = !self.collab_open,
+                 CommandAction::ToggleWorkspaces => self.workspace_open = !self.workspace_open,
+                 CommandAction::SaveWorkspace => {
+                    let ws = Workspace {
+                        name: self.current_workspace.clone(),
+                        code: self.live_code.clone(),
+                        tasks: self.agent_system.tasks.clone(),
+                    };
+                    self.workspaces.insert(self.current_workspace.clone(), ws);
+                 },
              }
         }
 
@@ -463,6 +489,75 @@ impl TemplateApp {
                             self.new_task_buffer.clear();
                         }
                     }
+                });
+            });
+
+        egui::Window::new("Workspaces")
+            .open(&mut self.workspace_open)
+            .default_pos(pos2(win_rect.center().x, win_rect.center().y))
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Current:");
+                    ui.strong(&self.current_workspace);
+                });
+                ui.separator();
+                ui.heading("Switch To:");
+                let mut to_switch = None;
+                let mut to_delete = None;
+                for name in self.workspaces.keys() {
+                    ui.horizontal(|ui| {
+                        if ui.button(name).clicked() {
+                            to_switch = Some(name.clone());
+                        }
+                        if name != "Default" {
+                             if ui.button("🗑").clicked() {
+                                 to_delete = Some(name.clone());
+                             }
+                        }
+                    });
+                }
+                if let Some(name) = to_switch {
+                    // Save current
+                    let ws = Workspace {
+                        name: self.current_workspace.clone(),
+                        code: self.live_code.clone(),
+                        tasks: self.agent_system.tasks.clone(),
+                    };
+                    self.workspaces.insert(self.current_workspace.clone(), ws);
+
+                    // Load new
+                    self.current_workspace = name;
+                    if let Some(ws) = self.workspaces.get(&self.current_workspace) {
+                        self.live_code = ws.code.clone();
+                        self.agent_system.tasks = ws.tasks.clone();
+                    }
+                }
+                if let Some(name) = to_delete {
+                    self.workspaces.remove(&name);
+                }
+
+                ui.separator();
+                ui.horizontal(|ui| {
+                     ui.text_edit_singleline(&mut self.new_workspace_name);
+                     if ui.button("Create New").clicked() && !self.new_workspace_name.is_empty() {
+                         let name = self.new_workspace_name.clone();
+                         if !self.workspaces.contains_key(&name) {
+                             // Save current
+                             let ws = Workspace {
+                                 name: self.current_workspace.clone(),
+                                 code: self.live_code.clone(),
+                                 tasks: self.agent_system.tasks.clone(),
+                             };
+                             self.workspaces.insert(self.current_workspace.clone(), ws);
+
+                             // Create new (empty)
+                             self.current_workspace = name.clone();
+                             self.live_code.clear();
+                             self.agent_system.tasks.clear();
+                             self.workspaces.insert(name, Workspace { name: self.current_workspace.clone(), ..Default::default() });
+                             self.new_workspace_name.clear();
+                         }
+                     }
                 });
             });
 
@@ -1453,6 +1548,17 @@ impl eframe::App for TemplateApp {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, eframe::APP_KEY, &self.theme);
         eframe::set_value(storage, "interval", &self.interval_word);
+
+        // Update current workspace before saving
+        let ws = Workspace {
+            name: self.current_workspace.clone(),
+            code: self.live_code.clone(),
+            tasks: self.agent_system.tasks.clone(),
+        };
+        self.workspaces.insert(self.current_workspace.clone(), ws);
+
+        eframe::set_value(storage, "workspaces", &self.workspaces);
+        eframe::set_value(storage, "current_workspace", &self.current_workspace);
     }
 
     /// Called each time the UI needs repainting, which may be many times per second.
