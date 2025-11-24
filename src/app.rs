@@ -78,6 +78,7 @@ pub struct TemplateApp {
     new_agent_url: String,
     new_agent_system: String,
     new_task_buffer: String,
+    planning_goal: String,
     // Collaboration
     collab_system: CollabSystem,
     collab_url: String,
@@ -156,6 +157,7 @@ impl Default for TemplateApp {
             new_agent_url: "http://localhost:11434".to_string(),
             new_agent_system: "You are a helpful coding assistant.".to_string(),
             new_task_buffer: String::new(),
+            planning_goal: String::new(),
             collab_system: CollabSystem::default(),
             collab_url: "ws://localhost:8080".to_string(),
             collab_open: false,
@@ -535,9 +537,10 @@ impl TemplateApp {
             .show(ctx, |ui| {
                 self.agent_system.ui_tasks(ui);
                 ui.separator();
+                ui.heading("Add Task");
                 ui.horizontal(|ui| {
                     ui.text_edit_singleline(&mut self.new_task_buffer);
-                    if ui.button("Add Task").clicked() {
+                    if ui.button("Add").clicked() {
                         if !self.new_task_buffer.is_empty() {
                             self.agent_system
                                 .add_task(self.new_task_buffer.clone());
@@ -545,6 +548,19 @@ impl TemplateApp {
                         }
                     }
                 });
+                ui.separator();
+                ui.heading("AI Planning");
+                ui.label("Describe a high-level goal:");
+                ui.add(egui::TextEdit::multiline(&mut self.planning_goal).desired_rows(2));
+                if ui.button("🔮 Generate Plan").clicked() && !self.planning_goal.is_empty() {
+                     // Find a suitable agent
+                     if let Some(agent) = self.agent_system.agents.values().find(|a| matches!(a.config.role, AgentRole::Generalist) || true) {
+                         let agent_id = agent.id;
+                         let config = agent.config.clone();
+                         self.agent_system.spawn_planning_request(agent_id, config, &self.planning_goal, &self.live_code);
+                         self.agent_system.log(format!("Planning started for: {}", self.planning_goal));
+                     }
+                }
             });
 
         egui::Window::new("Workspaces")

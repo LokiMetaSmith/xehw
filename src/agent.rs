@@ -68,6 +68,7 @@ pub struct Task {
 pub enum AgentEvent {
     LlmResponse(Uuid, String), // AgentID, ResponseBody
     ChatResponse(Uuid, String), // AgentID, ResponseBody
+    PlanResponse(Uuid, String), // AgentID, ResponseBody (List of tasks)
     LlmError(Uuid, String),
 }
 
@@ -180,6 +181,46 @@ impl AgentSystem {
                         agent.status = AgentStatus::Idle;
                     }
                 }
+                AgentEvent::PlanResponse(aid, body) => {
+                    if let Some(agent) = self.agents.get_mut(&aid) {
+                        let response_text = if let Ok(v) = serde_json::from_str::<serde_json::Value>(&body) {
+                             v["response"].as_str().unwrap_or(&body).to_string()
+                        } else {
+                             body
+                        };
+
+                        // Parse lines starting with "- " or "* "
+                        let new_tasks: Vec<String> = response_text.lines()
+                            .filter_map(|line| {
+                                let trimmed = line.trim();
+                                if trimmed.starts_with("- ") || trimmed.starts_with("* ") {
+                                    Some(trimmed[2..].to_string())
+                                } else if let Some(idx) = trimmed.find(". ") {
+                                    // Handle "1. Task" format
+                                    if trimmed[..idx].chars().all(char::is_numeric) {
+                                        Some(trimmed[idx+2..].to_string())
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect();
+
+                        for desc in new_tasks {
+                            self.tasks.push(Task {
+                                id: Uuid::new_v4(),
+                                description: desc,
+                                status: TaskStatus::Pending,
+                                assignee: None,
+                            });
+                        }
+
+                        self.message_log.push_back(format!("{} generated a plan.", agent.config.name));
+                        agent.status = AgentStatus::Idle;
+                    }
+                }
                 AgentEvent::LlmError(aid, err) => {
                     if let Some(agent) = self.agents.get_mut(&aid) {
                         agent.status = AgentStatus::Error(err.clone());
@@ -254,6 +295,49 @@ impl AgentSystem {
                         AgentEvent::LlmResponse(agent_id, text.to_string())
                     } else {
                         AgentEvent::LlmError(agent_id, format!("Status: {}", response.status))
+                    }
+                }
+                Err(e) => AgentEvent::LlmError(agent_id, e),
+            };
+
+            if let Ok(mut q) = queue_clone.lock() {
+                q.push_back(event);
+            }
+        });
+    }
+
+    pub fn spawn_planning_request(&self, agent_id: Uuid, config: AgentConfig, goal: &str, current_code: &str) {
+        let prompt = format!(
+            "You are a technical lead. Your goal is: {}\n\
+            Current Code:\n{}\n\
+            Break this goal down into a list of small, actionable coding tasks.\n\
+            Format the output as a bulleted list (start lines with '- ').\n\
+            Do not include extra chatter, just the list.",
+            goal, current_code
+        );
+
+        let body_json = serde_json::json!({
+            "model": config.model,
+            "prompt": prompt,
+            "stream": false
+        });
+
+        let mut request = ehttp::Request::post(
+            format!("{}/api/generate", config.base_url),
+            serde_json::to_vec(&body_json).unwrap_or_default(),
+        );
+        request.headers.insert("Content-Type".to_string(), "application/json".to_string());
+
+        let queue_clone = self.event_queue.clone();
+
+        ehttp::fetch(request, move |result: ehttp::Result<ehttp::Response>| {
+            let event = match result {
+                Ok(response) => {
+                    if response.status == 200 {
+                         let text = response.text().unwrap_or_default();
+                         AgentEvent::PlanResponse(agent_id, text.to_string())
+                    } else {
+                         AgentEvent::LlmError(agent_id, format!("Status: {}", response.status))
                     }
                 }
                 Err(e) => AgentEvent::LlmError(agent_id, e),
