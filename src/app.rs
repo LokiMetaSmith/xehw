@@ -75,6 +75,7 @@ pub struct TemplateApp {
     agent_paste_buffer: String,
     new_agent_model: String,
     new_agent_url: String,
+    new_agent_system: String,
     new_task_buffer: String,
     // Collaboration
     collab_system: CollabSystem,
@@ -151,6 +152,7 @@ impl Default for TemplateApp {
             agent_paste_buffer: String::new(),
             new_agent_model: "llama3".to_string(),
             new_agent_url: "http://localhost:11434".to_string(),
+            new_agent_system: "You are a helpful coding assistant.".to_string(),
             new_task_buffer: String::new(),
             collab_system: CollabSystem::default(),
             collab_url: "ws://localhost:8080".to_string(),
@@ -443,6 +445,8 @@ impl TemplateApp {
                      ui.label("Base URL:");
                      ui.text_edit_singleline(&mut self.new_agent_url);
                 });
+                ui.label("System Prompt:");
+                ui.add(egui::TextEdit::multiline(&mut self.new_agent_system).desired_rows(2));
                 ui.label("Paste config (Name:Key) one per line:");
                 ui.add(egui::TextEdit::multiline(&mut self.agent_paste_buffer).desired_rows(3));
                 if ui.button("Add Agents").clicked() {
@@ -455,6 +459,7 @@ impl TemplateApp {
                                 api_key: parts[1].trim().to_string(),
                                 base_url: self.new_agent_url.clone(),
                                 model: self.new_agent_model.clone(),
+                                system_prompt: self.new_agent_system.clone(),
                             });
                         }
                     }
@@ -499,6 +504,21 @@ impl TemplateApp {
                 ui.horizontal(|ui| {
                     ui.label("Current:");
                     ui.strong(&self.current_workspace);
+                    if ui.button("📋 Fork").clicked() {
+                         let new_name = format!("{}-copy", self.current_workspace);
+                         if !self.workspaces.contains_key(&new_name) {
+                             // Save current state to the new workspace
+                             let ws = Workspace {
+                                 name: new_name.clone(),
+                                 code: self.live_code.clone(),
+                                 tasks: self.agent_system.tasks.clone(),
+                             };
+                             self.workspaces.insert(new_name.clone(), ws);
+                             // Switch to it
+                             self.current_workspace = new_name;
+                             // No need to reload code/tasks as they are identical
+                         }
+                    }
                 });
                 ui.separator();
                 ui.heading("Switch To:");

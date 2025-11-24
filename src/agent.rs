@@ -27,6 +27,7 @@ pub struct AgentConfig {
     pub api_key: String,
     pub base_url: String,
     pub model: String,
+    pub system_prompt: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -269,6 +270,9 @@ impl AgentSystem {
         // For standard Ollama/Llama, prompt format is just appending text or using template.
         // Here we just concat for simplicity:
         let mut prompt = String::new();
+        if !config.system_prompt.is_empty() {
+            prompt.push_str(&format!("System: {}\n", config.system_prompt));
+        }
         for msg in history {
              prompt.push_str(&format!("{}: {}\n", msg.sender, msg.content));
         }
