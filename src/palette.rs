@@ -20,6 +20,7 @@ pub enum CommandAction {
     ConnectNetwork,
     ToggleWorkspaces,
     SaveWorkspace,
+    ToggleFileExplorer,
 }
 
 #[derive(Clone)]
@@ -58,6 +59,7 @@ impl Default for Palette {
                 Command { name: "Network: Connect...".into(), action: CommandAction::ConnectNetwork },
                 Command { name: "Workspaces: Manage...".into(), action: CommandAction::ToggleWorkspaces },
                 Command { name: "Workspaces: Save".into(), action: CommandAction::SaveWorkspace },
+                Command { name: "View: Toggle File Explorer".into(), action: CommandAction::ToggleFileExplorer },
             ],
             selected_index: 0,
             matcher: SkimMatcherV2::default(),
